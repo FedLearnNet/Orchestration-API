@@ -7,7 +7,7 @@
     <packaging>quarkus</packaging>
 
     <properties>
-        <compiler-plugin.version>3.14.1</compiler-plugin.version>
+        <compiler-plugin.version>3.16.0</compiler-plugin.version>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -16,8 +16,8 @@
         <quarkus.platform.version>3.39.2</quarkus.platform.version>
         <docker.version>3.7.1</docker.version>
         <skipITs>true</skipITs>
-        <surefire-plugin.version>3.5.4</surefire-plugin.version>
-        <org.projectlombok.version>1.18.44</org.projectlombok.version>
+        <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <org.projectlombok.version>1.18.48</org.projectlombok.version>
         <org.projectlombok.binding.version>0.2.0</org.projectlombok.binding.version>
     </properties>
 
