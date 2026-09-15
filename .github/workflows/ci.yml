@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - ".mvn/**"
+      - "mvnw"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - ".mvn/**"
+      - "mvnw"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      # Tests use H2; tests around container handling use the Docker daemon of the runner
+      - name: Build and test
+        run: bash mvnw -B -ntp verify
+
+      # Summary on the run page and failed tests as annotations.
+      - name: Publish test results
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v6.5.0
+        with:
+          report_paths: "target/*-reports/TEST-*.xml"
+          annotate_only: true
+          require_tests: true
+          include_time_in_summary: true
+
+      - name: Upload test reports
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 7
