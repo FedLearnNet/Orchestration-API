@@ -63,14 +63,13 @@ jobs:
             -f src/main/docker/Dockerfile.jvm \
             --push .
 
-  # Vulnerability scan after every build (results under Security → Code scanning).
-  # Disabled for now, run the "Container scan" workflow manually instead. Uncomment to enable.
-  # scan:
-  #   needs: image
-  #   uses: ./.github/workflows/scan.yml
-  #   with:
-  #     tag: ${{ github.ref == 'refs/heads/main' && 'latest' || 'staging' }}
-  #   permissions:
-  #     contents: read
-  #     packages: read
-  #     security-events: write
+  # Vulnerability scan after every build (results under Security → Code scanning)
+  scan:
+    needs: image
+    uses: ./.github/workflows/scan.yml
+    with:
+      tag: ${{ github.ref == 'refs/heads/main' && 'latest' || 'staging' }}
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
