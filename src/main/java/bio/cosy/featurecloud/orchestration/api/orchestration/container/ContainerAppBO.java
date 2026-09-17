@@ -101,6 +101,7 @@ public class ContainerAppBO {
             throw new NotFoundException(e.getMessage());
         } catch (Exception e) {
             Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
+            throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
         CreateContainerResponse response;

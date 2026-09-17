@@ -102,6 +102,7 @@ public class WorkflowNodeBO {
         } catch (Exception e) {
             Log.errorf(e, "Failed to load Docker image %s for workflow %d node %d: %s",
                     createDTO.getAppImage(), createDTO.getWorkflowId(), createDTO.getWorkflowNodeId(), e.getMessage());
+            throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
         CreateContainerResponse response;

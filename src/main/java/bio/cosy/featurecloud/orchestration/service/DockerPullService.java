@@ -50,8 +50,21 @@ public class DockerPullService {
             Log.errorf("Docker image %s not found: %s", imageName, e.getMessage());
             throw new jakarta.ws.rs.NotFoundException("Docker image not found: " + imageName, e);
         } catch (Exception e) {
+            if (isAvailableLocally(imageName, client)) {
+                Log.warnf("Failed to pull Docker image %s, using the locally available image: %s", imageName, e.getMessage());
+                return;
+            }
             Log.errorf("Failed to pull Docker image %s: %s", imageName, e.getMessage());
             throw e;
+        }
+    }
+
+    private boolean isAvailableLocally(String imageName, DockerClient client) {
+        try {
+            client.inspectImageCmd(imageName).exec();
+            return true;
+        } catch (NotFoundException e) {
+            return false;
         }
     }
 }
