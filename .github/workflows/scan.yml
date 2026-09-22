@@ -37,7 +37,7 @@ jobs:
         # Scheduled runs have no inputs and scan both published tags
         tag: ${{ fromJSON(inputs.tag && format('["{0}"]', inputs.tag) || '["latest", "staging"]') }}
     steps:
-      - uses: docker/login-action@v4.6.0
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
