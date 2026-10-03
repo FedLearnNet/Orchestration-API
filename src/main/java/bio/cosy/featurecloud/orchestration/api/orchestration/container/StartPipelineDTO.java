@@ -19,6 +19,8 @@ public class StartPipelineDTO implements BaseName {
 
     private List<String> environments = new ArrayList<>();
 
+    private Boolean localOnly;
+
     public String getBasename() {
         return getPipelineName(pipelineId);
     }
@@ -33,5 +35,9 @@ public class StartPipelineDTO implements BaseName {
         if (env != null && !env.isBlank()) {
             environments.add(env);
         }
+    }
+
+    public boolean isLocalOnly() {
+        return localOnly != null && localOnly;
     }
 }

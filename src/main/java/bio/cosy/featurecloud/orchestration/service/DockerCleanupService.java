@@ -1,6 +1,7 @@
 package bio.cosy.featurecloud.orchestration.service;
 
 import bio.cosy.featurecloud.orchestration.helper.NamingService;
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Container;
 import bio.cosy.featurecloud.orchestration.docker.DockerLabels;
 import bio.cosy.featurecloud.orchestration.docker.LabelsHelper;
@@ -21,6 +22,18 @@ public class DockerCleanupService {
 
     @Inject
     DockerVolumeService dockerVolumeService;
+
+    @Inject
+    DockerClient dockerClient;
+
+    public void removeImage(String name) {
+        try {
+            dockerClient.removeImageCmd(name).withForce(true).exec();
+            Log.infof("Removed image %s", name);
+        } catch (Exception e) {
+            Log.warnf("Failed to remove image %s: %s", name, e.getMessage());
+        }
+    }
 
     /**
      * Cleans up a Docker container and its associated resources.
