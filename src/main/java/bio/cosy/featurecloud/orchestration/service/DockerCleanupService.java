@@ -53,6 +53,9 @@ public class DockerCleanupService {
             container = dockerAppService.getById(containerId);
         } catch (NotFoundException e) {
             Log.warnf("Skipping cleanup: container=%s system_name=%s is already removed", containerId, NamingService.getSystemName());
+            if (removeDedicatedNetwork) {
+                dockerNetworkService.removeDedicatedNetworksOf(containerId);
+            }
             return;
         }
         // Check ownership even for direct cleanup requests and even when volumes are kept.
