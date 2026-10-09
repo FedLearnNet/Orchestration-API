@@ -73,8 +73,8 @@ public class ContainerPipelineBO {
         enrichConfig(createDTO);
         ensureNotRunningAlready(createDTO);
         try {
-            Log.infof("Loading application image: %s", createDTO.getAppImage());
-            dockerPullService.loadApplicationImage(createDTO.getAppImage());
+            Log.infof("Loading pipeline image: %s", createDTO.getAppImage());
+            dockerPullService.loadPipelineImage(createDTO.getAppImage());
         } catch (NotFoundException e) {
             Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
             throw new NotFoundException(e.getMessage());
@@ -116,6 +116,10 @@ public class ContainerPipelineBO {
             Log.errorf("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");
         }
+        if (config.dockerRegistry().isEmpty()) {
+            Log.errorf("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
+            throw new BadRequestException("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
+        }
         if (config.repoToken().isEmpty()) {
             Log.errorf("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
@@ -127,7 +131,7 @@ public class ContainerPipelineBO {
         addOptionalEnv(createDTO, "BUILDX_PROVENANCE_MODE", config.buildxProvenanceMode());
         addEnv(createDTO, "COSIGN_SIGN", config.cosignSign());
         addEnv(createDTO, "DOCKER_LOGIN", config.dockerLogin());
-        addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry());
+        addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry().get());
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
         addEnv(createDTO, "DOCKER_USERNAME", config.dockerUsername());
         addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().get());

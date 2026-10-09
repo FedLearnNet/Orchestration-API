@@ -1,5 +1,6 @@
 package bio.cosy.featurecloud.orchestration.service;
 
+import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.NamedDockerClient;
 import bio.cosy.featurecloud.orchestration.docker.client.config.DockerClientRuntimeConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.config.DockerRuntimeConfig;
@@ -13,11 +14,6 @@ import jakarta.ws.rs.ForbiddenException;
 
 @ApplicationScoped
 public class DockerPullService {
-
-    @Inject
-    @NamedDockerClient("gitlab")
-    DockerClient dockerClientGitlab;
-
     @Inject
     @NamedDockerClient("private")
     DockerClient dockerClientPrivate;
@@ -29,12 +25,12 @@ public class DockerPullService {
     @Inject
     DockerRuntimeConfig dockerRuntimeConfig;
 
+    @Inject
+    PipelineConfig pipelineConfig;
 
     public void loadApplicationImage(String imageName) throws Exception {
         String registry = registryOf(imageName);
-        if (isRegistryOf(registry, "gitlab")) {
-            loadApplicationImage(imageName, dockerClientGitlab, "gitlab");
-        } else if (isRegistryOf(registry, "private")) {
+        if (isRegistryOf(registry, "private")) {
             loadApplicationImage(imageName, dockerClientPrivate, "private");
         } else {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
@@ -44,11 +40,17 @@ public class DockerPullService {
 
     public void loadPipelineImage(String imageName) throws Exception {
         String registry = registryOf(imageName);
-        if (!isRegistryOf(registry, "ghcr")) {
-            Log.errorf("Pipeline image %s is not from an allowed registry", imageName);
-            throw new ForbiddenException("Pipeline image registry not allowed: " + registry);
+        if (!isRegistryOf(registry, "ghcr") || !isPipelineImage(imageName)) {
+            Log.errorf("Pipeline image %s is not an allowed image", imageName);
+            throw new ForbiddenException("Pipeline image not allowed: " + imageName);
         }
         loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
+    }
+
+    // the image must be exactly pipeline.image-prefix, with any tag or digest
+    private boolean isPipelineImage(String imageName) {
+        String prefix = pipelineConfig.imagePrefix();
+        return imageName.equals(prefix) || imageName.startsWith(prefix + ":") || imageName.startsWith(prefix + "@");
     }
 
 
