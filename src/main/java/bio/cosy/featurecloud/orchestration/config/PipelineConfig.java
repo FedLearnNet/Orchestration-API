@@ -34,20 +34,24 @@ public interface PipelineConfig {
     @WithDefault("false")
     boolean cosignSign();
 
+    @WithName("image-prefix")
+    @WithDefault("ghcr.io/fedlearnnet/tool-build-pipeline/pipeline")
+    String imagePrefix();
+
     @WithName("docker-login")
     @WithDefault("true")
     boolean dockerLogin();
 
     @WithName("docker-registry")
-    @WithDefault("gitlab.cosy.bio:5050")
-    String dockerRegistry();
+    // Must be set via the environment variable ORCH_PIPELINE__DOCKER_REGISTRY
+    Optional<String> dockerRegistry();
 
     @WithName("docker-group")
     @WithDefault("/cosybio/federated-learning/federated_db/app-build-pipeline")
     String dockerGroup();
 
     @WithName("docker-username")
-    @WithDefault("USERNAME")
+    @WithDefault("pipeline")
     String dockerUsername();
 
     @WithName("docker-password")
