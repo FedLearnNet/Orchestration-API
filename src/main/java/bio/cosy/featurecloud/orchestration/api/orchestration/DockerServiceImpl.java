@@ -1,9 +1,7 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration;
 
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import bio.cosy.featurecloud.orchestration.service.DockerOrchestration;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
 import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
+import bio.cosy.featurecloud.orchestration.service.DockerOrchestration;
 import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.model.Info;
 import io.quarkus.logging.Log;
@@ -20,17 +18,17 @@ public class DockerServiceImpl implements DockerService {
     DockerOrchestration dockerOrchestration;
 
     @Inject
-    DockerAppService dockerAppService;
-
-    @Inject
-    DockerVolumeService dockerVolumeService;
-
-    @Inject
     DockerCleanupService dockerCleanupService;
 
     @Override
     public Info getInfo() {
         return dockerOrchestration.getInfo();
+    }
+
+    @Override
+    public Response removeLocalImage(String name) {
+        dockerCleanupService.removeImage(name);
+        return Response.noContent().build();
     }
 
     @Override

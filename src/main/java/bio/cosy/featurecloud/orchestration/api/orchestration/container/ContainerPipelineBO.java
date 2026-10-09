@@ -1,13 +1,9 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.container;
 
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
-import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
-import bio.cosy.featurecloud.orchestration.service.DockerPullService;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
+import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
+import bio.cosy.featurecloud.orchestration.service.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.command.CreateContainerResponse;
@@ -90,9 +86,18 @@ public class ContainerPipelineBO {
         CreateContainerResponse response;
         response = dockerAppService.startPipeline(createDTO, config.hostRemove());
 
-        // The build pipeline pulls and pushes images, so it always needs internet access
-        dockerNetworkService.connectContainerToNetworks(response.getId(),
-                new ContainerNetworkAccess(true, false, false));
+        // A remote build pulls and pushes images, a local one only reports back to the learning API on the host
+        if (createDTO.isLocalOnly()) {
+            Log.infof("Container started in local-only mode. It will not be connected to the internet");
+            dockerNetworkService.connectContainerToNetworks(response.getId(),
+                    new ContainerNetworkAccess(false, true, false));
+
+        } else {
+            Log.infof("Container started and connected to the network.");
+            dockerNetworkService.connectContainerToNetworks(response.getId(),
+                    new ContainerNetworkAccess(true, false, false));
+
+        }
 
         Log.infof("Container started successfully with ID: %s", response.getId());
         startedContainers.add(response.getId());
@@ -100,6 +105,13 @@ public class ContainerPipelineBO {
     }
 
     private void enrichConfig(StartPipelineDTO createDTO) {
+        if (createDTO.isLocalOnly()) {
+            addEnv(createDTO, "LOCAL_ONLY", true);
+            addEnv(createDTO, "USE_BUILDX", false);
+            addEnv(createDTO, "DOCKER_LOGIN", false);
+            addEnv(createDTO, "REPO_PATH", config.repoPath());
+            return;
+        }
         if (config.dockerPassword().isEmpty() && config.dockerLogin()) {
             Log.errorf("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");

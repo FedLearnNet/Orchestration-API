@@ -1,6 +1,7 @@
 package bio.cosy.featurecloud.orchestration.service;
 
 import bio.cosy.featurecloud.orchestration.helper.NamingService;
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Container;
 import bio.cosy.featurecloud.orchestration.docker.DockerLabels;
 import bio.cosy.featurecloud.orchestration.docker.LabelsHelper;
@@ -22,6 +23,18 @@ public class DockerCleanupService {
     @Inject
     DockerVolumeService dockerVolumeService;
 
+    @Inject
+    DockerClient dockerClient;
+
+    public void removeImage(String name) {
+        try {
+            dockerClient.removeImageCmd(name).withForce(true).exec();
+            Log.infof("Removed image %s", name);
+        } catch (Exception e) {
+            Log.warnf("Failed to remove image %s: %s", name, e.getMessage());
+        }
+    }
+
     /**
      * Cleans up a Docker container and its associated resources.
      * Stops the container, removes its dedicated network, and optionally removes the container and its associated volumes.
@@ -40,6 +53,9 @@ public class DockerCleanupService {
             container = dockerAppService.getById(containerId);
         } catch (NotFoundException e) {
             Log.warnf("Skipping cleanup: container=%s system_name=%s is already removed", containerId, NamingService.getSystemName());
+            if (removeDedicatedNetwork) {
+                dockerNetworkService.removeDedicatedNetworksOf(containerId);
+            }
             return;
         }
         // Check ownership even for direct cleanup requests and even when volumes are kept.
