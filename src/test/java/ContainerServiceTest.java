@@ -8,6 +8,7 @@ import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.*;
 
 import java.io.InputStream;
+import java.util.List;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -138,11 +139,24 @@ public class ContainerServiceTest {
     @Test
     @Order(8)
     public void testDelete() {
-        given()
-                .queryParam("cleanup", true)
-                .when().delete("/container/{id}", containerId)
+        // Find previously started containers (in other tests)
+        List<String> ids = given()
+                .when().get("/container/running")
                 .then()
-                .statusCode(200);
+                .statusCode(200)
+                .extract().jsonPath().getList(
+                        "findAll { it.Labels['featurecloud.app.id'] == '1' && it.Labels['featurecloud.group.id'] == '1' }.Id");
+        Assertions.assertFalse(ids.isEmpty(), "The started container should still exist");
 
+        // Delete them all
+        // Fail if that fails
+        // We don't check whether they are actually stopped
+        for (String id : ids) {
+            given()
+                    .queryParam("cleanup", true)
+                    .when().delete("/container/{id}", id)
+                    .then()
+                    .statusCode(200);
+        }
     }
 }
