@@ -120,10 +120,6 @@ public class ContainerPipelineBO {
             Log.errorf("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
         }
-        if (config.repoToken().isEmpty()) {
-            Log.errorf("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
-            throw new BadRequestException("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
-        }
         addEnv(createDTO, "USE_BUILDX", config.useBuildx());
         addEnv(createDTO, "BUILDX_PLATFORMS", toJsonArray(config.buildxPlatforms()));
         addEnv(createDTO, "BUILDX_SBOM", config.buildxSbom());
@@ -135,7 +131,8 @@ public class ContainerPipelineBO {
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
         addEnv(createDTO, "DOCKER_USERNAME", config.dockerUsername());
         addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().get());
-        addEnv(createDTO, "REPO_TOKEN", config.repoToken().get());
+        // only needed to clone private tool repositories
+        addOptionalEnv(createDTO, "REPO_TOKEN", config.repoToken());
         addEnv(createDTO, "REPO_PATH", config.repoPath());
     }
 
