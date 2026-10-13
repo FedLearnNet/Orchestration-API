@@ -2,6 +2,7 @@ package bio.cosy.featurecloud.orchestration.api.orchestration;
 
 import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
 import bio.cosy.featurecloud.orchestration.service.DockerOrchestration;
+import bio.cosy.featurecloud.orchestration.service.DockerRegistryService;
 import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.model.Info;
 import io.quarkus.logging.Log;
@@ -20,9 +21,17 @@ public class DockerServiceImpl implements DockerService {
     @Inject
     DockerCleanupService dockerCleanupService;
 
+    @Inject
+    DockerRegistryService dockerRegistryService;
+
     @Override
     public Info getInfo() {
         return dockerOrchestration.getInfo();
+    }
+
+    @Override
+    public boolean imageExistsInRegistry(String name) {
+        return dockerRegistryService.imageExistsInRegistry(name);
     }
 
     @Override

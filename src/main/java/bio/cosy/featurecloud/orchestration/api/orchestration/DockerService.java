@@ -22,6 +22,11 @@ public interface DockerService {
     @APIResponse(responseCode = "200", description = "info")
     Info getInfo();
 
+    @GET
+    @Path("image/exists")
+    @Operation(summary = "Check whether an application image exists in its registry")
+    boolean imageExistsInRegistry(@QueryParam("name") String name);
+
 
     @DELETE
     @Path("image")

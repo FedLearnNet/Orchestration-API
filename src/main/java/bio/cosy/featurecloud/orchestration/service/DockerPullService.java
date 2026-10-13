@@ -54,13 +54,13 @@ public class DockerPullService {
     }
 
 
-    private static String registryOf(String imageName) {
+    static String registryOf(String imageName) {
         int slash = imageName.indexOf('/');
         String first = slash > 0 ? imageName.substring(0, slash) : "";
         return first.contains(".") || first.contains(":") || first.equals("localhost") ? first : "docker.io";
     }
 
-    private boolean isRegistryOf(String registry, String clientName) {
+    boolean isRegistryOf(String registry, String clientName) {
         DockerClientRuntimeConfig config = dockerRuntimeConfig.namedDockerClients().get(clientName);
         return config != null && config.enabled() && config.registryUrl()
                 .map(url -> url.replaceFirst("^https?://", "").replaceAll("/+$", ""))
