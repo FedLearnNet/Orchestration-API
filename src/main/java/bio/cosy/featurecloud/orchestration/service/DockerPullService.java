@@ -28,9 +28,13 @@ public class DockerPullService {
     @Inject
     PipelineConfig pipelineConfig;
 
+    @Inject
+    ImageTrustService imageTrustService;
+
     public void loadApplicationImage(String imageName) throws Exception {
         String registry = registryOf(imageName);
         if (isRegistryOf(registry, "private")) {
+            imageTrustService.verifyApplicationImage(imageName);
             loadApplicationImage(imageName, dockerClientPrivate, "private");
         } else {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
@@ -44,6 +48,7 @@ public class DockerPullService {
             Log.errorf("Pipeline image %s is not an allowed image", imageName);
             throw new ForbiddenException("Pipeline image not allowed: " + imageName);
         }
+        imageTrustService.verifyPipelineImage(imageName);
         loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
     }
 

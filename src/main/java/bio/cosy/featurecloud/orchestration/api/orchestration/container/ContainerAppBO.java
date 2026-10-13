@@ -5,10 +5,9 @@ import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogDTO;
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.service.DockerAppService;
+import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
 import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
 import bio.cosy.featurecloud.orchestration.service.DockerPullService;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.model.Container;
 import io.quarkus.logging.Log;
@@ -33,9 +32,6 @@ import static bio.cosy.featurecloud.orchestration.api.orchestration.container.Co
 
 @ApplicationScoped
 public class ContainerAppBO {
-
-    @Inject
-    DockerVolumeService dockerVolumeService;
 
     @Inject
     DockerAppService dockerAppService;

@@ -31,10 +31,17 @@ services:
       QUARKUS_LOG_CONSOLE_JSON_ENABLED: false
       CONTAINER_HOST_OVERRIDE: host.docker.internal
       CONTAINER_NETWORK_NAMES: orch-network
+  #    PIPELINE_COSIGN_SIGN:
+  #    PIPELINE_COSIGN_KEY:
+  #    PIPELINE_IMAGE_TRUST_TOOLS_ENABLED:
+  #    PIPELINE_IMAGE_TRUST_TOOLS_PUBLIC_KEY:
+  #    PIPELINE_IMAGE_TRUST_PIPELINE_ENABLED:
+  #    PIPELINE_IMAGE_TRUST_PIPELINE_PUBLIC_KEY:
       QUARKUS_LOG_CATEGORY_"bio.cosy.featurecloud"_LEVEL: DEBUG
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - orch-data:/mnt/input:rw
+    #  - ./trust:/etc/fl-net/trust:ro
     depends_on:
       orch-api-db:
         condition: service_healthy

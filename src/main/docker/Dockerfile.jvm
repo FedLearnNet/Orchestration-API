@@ -80,6 +80,10 @@
 ###
 FROM registry.access.redhat.com/ubi9/openjdk-25
 
+ARG TARGETARCH
+ARG COSIGN_VERSION=v3.0.2
+ADD --chmod=0755 https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${TARGETARCH} /usr/local/bin/cosign
+
 ENV LANGUAGE='en_US:en'
 
 

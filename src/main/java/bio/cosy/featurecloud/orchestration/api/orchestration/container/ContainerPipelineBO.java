@@ -120,12 +120,16 @@ public class ContainerPipelineBO {
             Log.errorf("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
         }
+        if (config.cosign().sign() && config.cosign().key().filter(key -> !key.isBlank()).isEmpty()) {
+            throw new BadRequestException("Pipeline signing requires PIPELINE_COSIGN_KEY.");
+        }
         addEnv(createDTO, "USE_BUILDX", config.useBuildx());
         addEnv(createDTO, "BUILDX_PLATFORMS", toJsonArray(config.buildxPlatforms()));
         addEnv(createDTO, "BUILDX_SBOM", config.buildxSbom());
         addEnv(createDTO, "BUILDX_NO_DEFAULT_OCI_ARTIFACT", config.buildxNoDefaultOciArtifacts().orElse(true));
         addOptionalEnv(createDTO, "BUILDX_PROVENANCE_MODE", config.buildxProvenanceMode());
-        addEnv(createDTO, "COSIGN_SIGN", config.cosignSign());
+        addEnv(createDTO, "COSIGN_SIGN", config.cosign().sign());
+        addOptionalEnv(createDTO, "COSIGN_KEY", config.cosign().key());
         addEnv(createDTO, "DOCKER_LOGIN", config.dockerLogin());
         addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry().get());
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
