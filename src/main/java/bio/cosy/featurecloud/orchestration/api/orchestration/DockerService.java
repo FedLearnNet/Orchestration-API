@@ -27,6 +27,12 @@ public interface DockerService {
     @Operation(summary = "Check whether an application image exists in its registry")
     boolean imageExistsInRegistry(@QueryParam("name") String name);
 
+    @GET
+    @Path("image/resolve")
+    @Produces("text/plain")
+    @Operation(summary = "Resolve a tool image in the configured build registry")
+    String resolveToolImage(@QueryParam("slug") String slug, @QueryParam("commitHash") String commitHash);
+
 
     @DELETE
     @Path("image")

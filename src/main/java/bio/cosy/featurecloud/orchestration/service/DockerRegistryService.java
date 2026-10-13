@@ -1,5 +1,6 @@
 package bio.cosy.featurecloud.orchestration.service;
 
+import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.NamedDockerClient;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DockerClientImpl;
@@ -13,6 +14,7 @@ import jakarta.ws.rs.core.UriBuilder;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 @ApplicationScoped
 public class DockerRegistryService {
@@ -23,6 +25,23 @@ public class DockerRegistryService {
 
     @Inject
     DockerPullService dockerPullService;
+
+    @Inject
+    PipelineConfig pipelineConfig;
+
+    public String resolveToolImage(String slug, String commitHash) {
+        if (slug == null || !slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*")) {
+            throw new BadRequestException("Invalid tool slug");
+        }
+        if (commitHash == null || !commitHash.matches("(?i)(?:[0-9a-f]{40}|[0-9a-f]{64})")) {
+            throw new BadRequestException("A full Git commit hash is required");
+        }
+        String registry = pipelineConfig.dockerRegistry().filter(value -> !value.isBlank())
+                .orElseThrow(() -> new IllegalStateException("Pipeline Docker registry is not configured"))
+                .replaceFirst("^https?://", "").replaceAll("/+$", "");
+        String group = pipelineConfig.dockerGroup().replaceAll("^/+|/+$", "");
+        return registry + "/" + (group.isEmpty() ? "" : group + "/") + slug + ":" + commitHash.toLowerCase(Locale.ROOT);
+    }
 
     public boolean imageExistsInRegistry(String imageName) {
         if (imageName == null || imageName.isBlank()) {

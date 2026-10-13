@@ -35,6 +35,11 @@ public class DockerServiceImpl implements DockerService {
     }
 
     @Override
+    public String resolveToolImage(String slug, String commitHash) {
+        return dockerRegistryService.resolveToolImage(slug, commitHash);
+    }
+
+    @Override
     public Response removeLocalImage(String name) {
         dockerCleanupService.removeImage(name);
         return Response.noContent().build();
