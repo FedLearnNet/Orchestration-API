@@ -44,6 +44,17 @@ use the `.env.example` templates):
 | `QUARKUS_HTTP_CORS_ORIGINS`     | Allowed CORS origins (`staging`/`prod`)                                                     |
 | `CONTAINER_HOST_OVERRIDE`       | Hostname apps use to reach the host (dev: `host.docker.internal`)                           |
 
+### Image signature verification
+
+Cosign settings are grouped under `pipeline.cosign` (signing) and `pipeline.image-trust` (verification).
+Set `PIPELINE_COSIGN_SIGN=true` and `PIPELINE_COSIGN_KEY` to sign releases. Enable verification with
+`PIPELINE_IMAGE_TRUST_TOOLS_ENABLED=true` and `PIPELINE_IMAGE_TRUST_TOOLS_PUBLIC_KEY`; use the
+corresponding `PIPELINE_IMAGE_TRUST_PIPELINE_*` settings for the builder image. Both policies default
+to disabled and require signed `repository@sha256:...` references when enabled.
+
+Compose mounts public keys from `./trust`; the JVM image includes Cosign. Verification failures
+prevent startup, including the cached-image fallback. See [Cosign verification](https://docs.sigstore.dev/cosign/verifying/verify/).
+
 ### System naming and Docker ownership
 
 `CONTAINER_NAME` namespaces all Docker resources (names plus the `system_name` label), so several clinics can

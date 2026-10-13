@@ -4,6 +4,7 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import io.smallrye.config.WithName;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,9 +31,10 @@ public interface PipelineConfig {
     @WithDefault("true")
     Optional<Boolean> buildxNoDefaultOciArtifacts();
 
-    @WithName("cosign-sign")
-    @WithDefault("false")
-    boolean cosignSign();
+    Cosign cosign();
+
+    @WithName("image-trust")
+    ImageTrustConfig imageTrust();
 
     @WithName("image-prefix")
     @WithDefault("ghcr.io/fedlearnnet/tool-build-pipeline/pipeline")
@@ -67,4 +69,31 @@ public interface PipelineConfig {
     @WithName("hostRemove")
     @WithDefault("true")
     Boolean hostRemove();
+
+    interface Cosign {
+        @WithDefault("false")
+        boolean sign();
+
+        Optional<String> key();
+    }
+
+    interface ImageTrustConfig {
+        @WithDefault("cosign")
+        String executable();
+
+        @WithDefault("60s")
+        Duration timeout();
+
+        Policy tools();
+
+        Policy pipeline();
+
+        interface Policy {
+            @WithDefault("false")
+            boolean enabled();
+
+            @WithName("public-key")
+            Optional<String> publicKey();
+        }
+    }
 }
