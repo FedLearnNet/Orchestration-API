@@ -33,21 +33,19 @@ public class DockerPullService {
     ContainerConfig containerConfig;
 
     public void loadApplicationImage(String imageName) throws Exception {
-        String registry = registryOf(imageName);
-        if (isRegistryOf(registry, "private")) {
+        if (isRegistryOf(imageName, "private")) {
             loadApplicationImage(imageName, dockerClientPrivate, "private");
-        } else if (isRegistryOf(registry, "ghcr") && containerConfig.runtimeImages().stream()
+        } else if (isRegistryOf(imageName, "ghcr") && containerConfig.runtimeImages().stream()
                 .anyMatch(runtimeImage -> isImage(imageName, runtimeImage))) {
             loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
         } else {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
-            throw new ForbiddenException("Docker image registry not allowed: " + registry);
+            throw new ForbiddenException("Docker image registry not allowed: " + imageName);
         }
     }
 
     public void loadPipelineImage(String imageName) throws Exception {
-        String registry = registryOf(imageName);
-        if (!isRegistryOf(registry, "ghcr") || !isPipelineImage(imageName)) {
+        if (!isRegistryOf(imageName, "ghcr") || !isPipelineImage(imageName)) {
             Log.errorf("Pipeline image %s is not an allowed image", imageName);
             throw new ForbiddenException("Pipeline image not allowed: " + imageName);
         }
@@ -63,19 +61,22 @@ public class DockerPullService {
         return imageName.equals(name) || imageName.startsWith(name + ":") || imageName.startsWith(name + "@");
     }
 
-
-    static String registryOf(String imageName) {
-        int slash = imageName.indexOf('/');
-        String first = slash > 0 ? imageName.substring(0, slash) : "";
-        return first.contains(".") || first.contains(":") || first.equals("localhost") ? first : "docker.io";
-    }
-
-    boolean isRegistryOf(String registry, String clientName) {
+    // Ensures that the registry URL (ignoring any https/http prefix and trailing slashes)
+    // is a prefix of the image string
+    // -> ensures that the image belongs to the registry configured for the named docker client
+    boolean isRegistryOf(String image, String clientName) {
         DockerClientRuntimeConfig config = dockerRuntimeConfig.namedDockerClients().get(clientName);
         return config != null && config.enabled() && config.registryUrl()
-                .map(url -> url.replaceFirst("^https?://", "").replaceAll("/+$", ""))
-                .filter(registry::equals)
-                .isPresent();
+            .map(registryurl -> registryurl.replaceFirst("^https?://", "").replaceAll("/+$", ""))
+            .filter(url -> {
+                boolean matches = image.startsWith(url + "/");
+                if (!matches) {
+                    Log.infof("Registry mismatch for Docker client '%s': image registry '%s', normalized configured registry '%s'",
+                            clientName, image, url);
+                }
+                return matches;
+            })
+            .isPresent();
     }
 
 

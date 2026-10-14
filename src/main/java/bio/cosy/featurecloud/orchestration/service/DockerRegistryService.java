@@ -47,10 +47,9 @@ public class DockerRegistryService {
         if (imageName == null || imageName.isBlank()) {
             throw new BadRequestException("Image name must not be blank");
         }
-        String registry = DockerPullService.registryOf(imageName);
-        if (!dockerPullService.isRegistryOf(registry, "private")) {
+        if (!dockerPullService.isRegistryOf(imageName, "private")) {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
-            throw new ForbiddenException("Docker image registry not allowed: " + registry);
+            throw new ForbiddenException("Docker image registry not allowed: " + imageName);
         }
         if (!(dockerClientPrivate instanceof DockerClientImpl client)) {
             throw new IllegalStateException("Private docker client does not expose its http client");
@@ -70,7 +69,7 @@ public class DockerRegistryService {
                 return true;
             }
             if (status == 401 || status == 403 || status == 404) {
-                Log.infof("Docker image %s not available in registry %s (status %d)", imageName, registry, status);
+                Log.infof("Docker image %s not available in registry (status %d)", imageName, status);
                 return false;
             }
             throw new IllegalStateException("Registry lookup for " + imageName + " failed with status " + status
