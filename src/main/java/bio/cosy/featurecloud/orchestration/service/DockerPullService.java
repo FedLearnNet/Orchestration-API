@@ -38,6 +38,11 @@ public class DockerPullService {
         } else if (isRegistryOf(imageName, "ghcr") && containerConfig.runtimeImages().stream()
                 .anyMatch(runtimeImage -> isImage(imageName, runtimeImage))) {
             loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
+        } else if (containerConfig.localImagePrefixes().stream().anyMatch(imageName::startsWith)) {
+            // built by a local-only pipeline: never pulled, so a registry can not serve an image of the same name
+            if (!isAvailableLocally(imageName, dockerClientPrivate)) {
+                throw new NotFoundException("Locally built Docker image not found: " + imageName);
+            }
         } else {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
             throw new ForbiddenException("Docker image registry not allowed: " + imageName);
@@ -61,10 +66,21 @@ public class DockerPullService {
         return imageName.equals(name) || imageName.startsWith(name + ":") || imageName.startsWith(name + "@");
     }
 
+    // An image without registry is on Docker Hub, e.g. nginx:alpine is docker.io/library/nginx:alpine
+    public static String qualified(String imageName) {
+        int slash = imageName.indexOf('/');
+        String first = slash > 0 ? imageName.substring(0, slash) : "";
+        if (first.contains(".") || first.contains(":") || first.equals("localhost")) {
+            return imageName;
+        }
+        return "docker.io/" + (slash > 0 ? "" : "library/") + imageName;
+    }
+
     // Ensures that the registry URL (ignoring any https/http prefix and trailing slashes)
     // is a prefix of the image string
     // -> ensures that the image belongs to the registry configured for the named docker client
-    boolean isRegistryOf(String image, String clientName) {
+    boolean isRegistryOf(String imageName, String clientName) {
+        String image = qualified(imageName);
         DockerClientRuntimeConfig config = dockerRuntimeConfig.namedDockerClients().get(clientName);
         return config != null && config.enabled() && config.registryUrl()
             .map(registryurl -> registryurl.replaceFirst("^https?://", "").replaceAll("/+$", ""))
