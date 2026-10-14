@@ -1,5 +1,6 @@
 package bio.cosy.featurecloud.orchestration.service;
 
+import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.NamedDockerClient;
 import bio.cosy.featurecloud.orchestration.docker.client.config.DockerClientRuntimeConfig;
@@ -28,10 +29,16 @@ public class DockerPullService {
     @Inject
     PipelineConfig pipelineConfig;
 
+    @Inject
+    ContainerConfig containerConfig;
+
     public void loadApplicationImage(String imageName) throws Exception {
         String registry = registryOf(imageName);
         if (isRegistryOf(registry, "private")) {
             loadApplicationImage(imageName, dockerClientPrivate, "private");
+        } else if (isRegistryOf(registry, "ghcr") && containerConfig.runtimeImages().stream()
+                .anyMatch(runtimeImage -> isImage(imageName, runtimeImage))) {
+            loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
         } else {
             Log.errorf("Docker image %s is not from an allowed registry", imageName);
             throw new ForbiddenException("Docker image registry not allowed: " + registry);
@@ -49,8 +56,11 @@ public class DockerPullService {
 
     // the image must be exactly pipeline.image-prefix, with any tag or digest
     private boolean isPipelineImage(String imageName) {
-        String prefix = pipelineConfig.imagePrefix();
-        return imageName.equals(prefix) || imageName.startsWith(prefix + ":") || imageName.startsWith(prefix + "@");
+        return isImage(imageName, pipelineConfig.imagePrefix());
+    }
+
+    static boolean isImage(String imageName, String name) {
+        return imageName.equals(name) || imageName.startsWith(name + ":") || imageName.startsWith(name + "@");
     }
 
 
