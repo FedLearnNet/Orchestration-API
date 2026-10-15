@@ -225,4 +225,7 @@ public interface DockerClientRuntimeConfig {
      * @return Optional registry URL
      */
     Optional<String> registryUrl();
+
+    /** HTTP origin used to browse this registry. Defaults to registry-url over HTTPS. */
+    Optional<String> registryApiUrl();
 }

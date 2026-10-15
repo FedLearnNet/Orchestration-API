@@ -23,6 +23,11 @@ public interface DockerService {
     Info getInfo();
 
     @GET
+    @Path("registry/images")
+    @Operation(summary = "List repositories and tags in the configured private registry")
+    RegistryImagesDTO getRegistryImages();
+
+    @GET
     @Path("image/exists")
     @Operation(summary = "Check whether an application image exists in its registry")
     boolean imageExistsInRegistry(@QueryParam("name") String name);

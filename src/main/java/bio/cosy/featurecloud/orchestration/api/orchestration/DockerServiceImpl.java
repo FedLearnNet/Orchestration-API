@@ -30,6 +30,11 @@ public class DockerServiceImpl implements DockerService {
     }
 
     @Override
+    public RegistryImagesDTO getRegistryImages() {
+        return dockerRegistryService.getRegistryImages();
+    }
+
+    @Override
     public boolean imageExistsInRegistry(String name) {
         return dockerRegistryService.imageExistsInRegistry(name);
     }
