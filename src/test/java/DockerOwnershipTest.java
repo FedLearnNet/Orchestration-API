@@ -111,7 +111,7 @@ class DockerOwnershipTest {
         Map<String, String> labels = LabelsHelper.createLabelsForWorkflowNode(WORKFLOW, NODE);
         labels.put(DockerLabels.FEATURE_CLOUD_APP_ID.toString(), Long.toString(NODE));
         labels.put(DockerLabels.FEATURE_CLOUD_GROUP_ID.toString(), Long.toString(WORKFLOW));
-        labels.put(DockerLabels.FEATURE_CLOUD_PIPELINE.toString(), Long.toString(WORKFLOW));
+        labels.putAll(LabelsHelper.createLabelsForPipeline(WORKFLOW));
         labels.put(DockerLabels.FEATURE_CLOUD_WORKFLOW_STEP.toString(), STEP);
         return labels;
     }

@@ -7,7 +7,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 import java.net.URI;
@@ -17,7 +16,6 @@ import java.util.TreeSet;
 import java.util.function.Function;
 
 @RegisterRestClient(configKey = "docker-registry")
-@ClientHeaderParam(name = "Authorization", value = "{registryAuthorization}")
 @Produces(MediaType.APPLICATION_JSON)
 public interface DockerRegistryRestClient {
     @GET
