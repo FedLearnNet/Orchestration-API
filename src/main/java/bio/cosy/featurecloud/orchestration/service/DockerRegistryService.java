@@ -1,7 +1,11 @@
 package bio.cosy.featurecloud.orchestration.service;
 
+import bio.cosy.featurecloud.orchestration.api.orchestration.RegistryImagesDTO;
+import bio.cosy.featurecloud.orchestration.api.orchestration.RegistryRepositoryDTO;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.NamedDockerClient;
+import bio.cosy.featurecloud.orchestration.docker.client.config.DockerRuntimeConfig;
+import bio.cosy.featurecloud.orchestration.docker.registry.DockerRegistryRestClient;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.transport.DockerHttpClient;
@@ -10,24 +14,50 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.UriBuilder;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Locale;
 
 @ApplicationScoped
 public class DockerRegistryService {
+    @Inject
+    @RestClient
+    DockerRegistryRestClient registryClient;
 
     @Inject
     @NamedDockerClient("private")
     DockerClient dockerClientPrivate;
 
     @Inject
+    DockerRuntimeConfig dockerRuntimeConfig;
+
+    @Inject
     DockerPullService dockerPullService;
 
     @Inject
     PipelineConfig pipelineConfig;
+
+    public RegistryImagesDTO getRegistryImages() {
+        String registry = registryName();
+        try {
+            var repositories = new ArrayList<RegistryRepositoryDTO>();
+            var names = registryClient.listAllRepositories();
+            for (String name : names) {
+                validateRepository(name);
+                var tags = registryClient.listAllTags(name);
+                repositories.add(new RegistryRepositoryDTO(name, tags));
+            }
+            return new RegistryImagesDTO(registry, repositories);
+        } catch (ProcessingException e) {
+            throw new WebApplicationException("Could not read the Docker registry catalogue", e, 502);
+        }
+    }
 
     public String resolveToolImage(String slug, String commitHash) {
         if (slug == null || !slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*")) {
@@ -77,5 +107,19 @@ public class DockerRegistryService {
         } catch (IOException e) {
             throw new IllegalStateException("Registry lookup for " + imageName + " failed", e);
         }
+    }
+
+    private void validateRepository(String name) {
+        if (!name.matches("[a-z0-9]+(?:(?:[._-]+|/)[a-z0-9]+)*")) {
+            throw new BadRequestException("Invalid registry repository name");
+        }
+    }
+
+    private String registryName() {
+        var config = dockerRuntimeConfig.namedDockerClients().get("private");
+        if (config == null || !config.enabled() || config.registryUrl().isEmpty()) {
+            throw new WebApplicationException("Private Docker registry is not configured", 503);
+        }
+        return config.registryUrl().orElseThrow().replaceFirst("^https?://", "").replaceAll("/+$", "");
     }
 }
