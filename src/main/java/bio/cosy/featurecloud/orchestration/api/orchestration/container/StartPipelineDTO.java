@@ -19,7 +19,8 @@ public class StartPipelineDTO implements BaseName {
 
     private List<String> environments = new ArrayList<>();
 
-    private Boolean localOnly;
+    @NotNull(message = "runMode cannot be null")
+    private PipelineRunMode runMode = PipelineRunMode.ALL;
 
     public String getBasename() {
         return getPipelineName(pipelineId);
@@ -37,7 +38,4 @@ public class StartPipelineDTO implements BaseName {
         }
     }
 
-    public boolean isLocalOnly() {
-        return localOnly != null && localOnly;
-    }
 }
