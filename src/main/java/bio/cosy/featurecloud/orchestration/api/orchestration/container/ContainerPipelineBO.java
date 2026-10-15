@@ -24,9 +24,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ContainerPipelineBO {
 
     @Inject
-    DockerVolumeService dockerVolumeService;
-
-    @Inject
     DockerAppService dockerAppService;
 
     @Inject
@@ -82,8 +79,7 @@ public class ContainerPipelineBO {
             throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
-        CreateContainerResponse response;
-        response = dockerAppService.startPipeline(createDTO, config.hostRemove());
+        CreateContainerResponse response = dockerAppService.createPipeline(createDTO, config.hostRemove());
 
         // A remote build pulls and pushes images, a local one only reports back to the learning API on the host
         if (createDTO.getRunMode() == PipelineRunMode.LOCAL_BUILD) {
@@ -94,8 +90,9 @@ public class ContainerPipelineBO {
                     new ContainerNetworkAccess(true, false, false));
         }
 
-        Log.infof("Container started successfully with ID: %s", response.getId());
         startedContainers.add(response.getId());
+        dockerAppService.startContainer(response.getId());
+        Log.infof("Container started successfully with ID: %s", response.getId());
         return response;
     }
 
@@ -125,7 +122,7 @@ public class ContainerPipelineBO {
         addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry().get());
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
         addEnv(createDTO, "DOCKER_USERNAME", config.dockerUsername());
-        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword());
+        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().orElse(""));
         // only needed to clone private tool repositories
         addOptionalEnv(createDTO, "REPO_TOKEN", config.repoToken());
         addEnv(createDTO, "REPO_PATH", config.repoPath());
