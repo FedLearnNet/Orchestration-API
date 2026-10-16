@@ -109,6 +109,7 @@ public class DockerRegistryService {
         }
     }
 
+    // Docker repository names only, e.g. flnet/tools/my-tool: no '..' part, space, '?' or capital in the tags URL
     private void validateRepository(String name) {
         if (!name.matches("[a-z0-9]+(?:(?:[._-]+|/)[a-z0-9]+)*")) {
             throw new BadRequestException("Invalid registry repository name");
