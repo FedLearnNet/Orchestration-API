@@ -16,15 +16,12 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
 public class ContainerPipelineBO {
-
-    @Inject
-    DockerVolumeService dockerVolumeService;
 
     @Inject
     DockerAppService dockerAppService;
@@ -47,7 +44,7 @@ public class ContainerPipelineBO {
     @Inject
     ContainerConfig containerConfig;
 
-    private final Set<String> startedContainers = new HashSet<>();
+    private final Set<String> startedContainers = ConcurrentHashMap.newKeySet();
 
 
     void onShutdown(@Observes ShutdownEvent ev) {
@@ -69,7 +66,6 @@ public class ContainerPipelineBO {
     public CreateContainerResponse startPipeline(StartPipelineDTO createDTO) {
         Log.infof("Starting container process for pipeline ID: %d",
                 createDTO.getPipelineId());
-        //enrhcih config
         enrichConfig(createDTO);
         ensureNotRunningAlready(createDTO);
         try {
@@ -83,30 +79,26 @@ public class ContainerPipelineBO {
             throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
-        CreateContainerResponse response;
-        response = dockerAppService.startPipeline(createDTO, config.hostRemove());
+        CreateContainerResponse response = dockerAppService.createPipeline(createDTO, config.hostRemove());
 
         // A remote build pulls and pushes images, a local one only reports back to the learning API on the host
-        if (createDTO.isLocalOnly()) {
-            Log.infof("Container started in local-only mode. It will not be connected to the internet");
+        if (createDTO.getRunMode() == PipelineRunMode.LOCAL_BUILD) {
             dockerNetworkService.connectContainerToNetworks(response.getId(),
                     new ContainerNetworkAccess(false, true, false));
-
         } else {
-            Log.infof("Container started and connected to the network.");
             dockerNetworkService.connectContainerToNetworks(response.getId(),
                     new ContainerNetworkAccess(true, false, false));
-
         }
 
-        Log.infof("Container started successfully with ID: %s", response.getId());
         startedContainers.add(response.getId());
+        dockerAppService.startContainer(response.getId());
+        Log.infof("Container started successfully with ID: %s", response.getId());
         return response;
     }
 
     private void enrichConfig(StartPipelineDTO createDTO) {
-        if (createDTO.isLocalOnly()) {
-            addEnv(createDTO, "LOCAL_ONLY", true);
+        addEnv(createDTO, "RUN_MODE", createDTO.getRunMode().name());
+        if (createDTO.getRunMode() == PipelineRunMode.LOCAL_BUILD) {
             addEnv(createDTO, "USE_BUILDX", false);
             addEnv(createDTO, "DOCKER_LOGIN", false);
             addEnv(createDTO, "REPO_PATH", config.repoPath());
@@ -130,7 +122,7 @@ public class ContainerPipelineBO {
         addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry().get());
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
         addEnv(createDTO, "DOCKER_USERNAME", config.dockerUsername());
-        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().get());
+        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().orElse(""));
         // only needed to clone private tool repositories
         addOptionalEnv(createDTO, "REPO_TOKEN", config.repoToken());
         addEnv(createDTO, "REPO_PATH", config.repoPath());
@@ -142,6 +134,10 @@ public class ContainerPipelineBO {
 
     private void addOptionalEnv(StartPipelineDTO dto, String key, Optional<?> value) {
         value.ifPresent(v -> dto.addEnvironment(key + "=" + v));
+    }
+
+    public void forgetContainer(String containerId) {
+        startedContainers.remove(containerId);
     }
 
     private void ensureNotRunningAlready(StartPipelineDTO createDTO) {

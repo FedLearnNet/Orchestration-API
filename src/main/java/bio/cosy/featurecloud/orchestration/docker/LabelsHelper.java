@@ -1,12 +1,14 @@
 package bio.cosy.featurecloud.orchestration.docker;
 
 import bio.cosy.featurecloud.orchestration.helper.NamingService;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class LabelsHelper {
     public static final String DOCKER_FEATURE_CLOUD_VERSION = "v1";
+    public static final String PIPELINE_VERSION = "v1";
 
     public static Map<String, String> createLabels() {
         Map<String, String> maps = new HashMap<>();
@@ -53,6 +55,7 @@ public class LabelsHelper {
     public static Map<String, String> createLabelsForPipeline(Long pipelineId) {
         Map<String, String> maps = createLabels();
         maps.put(DockerLabels.FEATURE_CLOUD_PIPELINE.toString(), pipelineId.toString());
+        maps.put(DockerLabels.FEATURE_CLOUD_PIPELINE_VERSION.toString(), PIPELINE_VERSION);
         return maps;
     }
 

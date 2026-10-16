@@ -50,11 +50,18 @@ public class DockerPullService {
     }
 
     public void loadPipelineImage(String imageName) throws Exception {
-        if (!isRegistryOf(imageName, "ghcr") || !isPipelineImage(imageName)) {
-            Log.errorf("Pipeline image %s is not an allowed image", imageName);
-            throw new ForbiddenException("Pipeline image not allowed: " + imageName);
+        if (isPipelineImage(imageName)) {
+            if (isRegistryOf(imageName, "ghcr")) {
+                loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
+                return;
+            }
+            if (isRegistryOf(imageName, "private")) {
+                loadApplicationImage(imageName, dockerClientPrivate, "private");
+                return;
+            }
         }
-        loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
+        Log.errorf("Pipeline image %s is not an allowed image", imageName);
+        throw new ForbiddenException("Pipeline image not allowed: " + imageName);
     }
 
     // the image must be exactly pipeline.image-prefix, with any tag or digest
