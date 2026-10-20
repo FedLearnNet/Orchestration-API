@@ -38,6 +38,9 @@ public interface PipelineConfig {
     @WithDefault("ghcr.io/fedlearnnet/tool-build-pipeline/pipeline")
     String imagePrefix();
 
+    @WithName("image-tag")
+    String imageTag();
+
     @WithName("docker-login")
     @WithDefault("true")
     boolean dockerLogin();
