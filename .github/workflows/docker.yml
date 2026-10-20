@@ -75,7 +75,7 @@ jobs:
             develop) tag=staging ;;
             *) tag="${GITHUB_REF_NAME//\//-}" ;;
           esac
-          tag_args=(-t "$IMAGE:$tag" -t "$IMAGE:$tag-${GITHUB_SHA::7}")
+          tag_args=(-t "$IMAGE:$tag")
           if [ "$TAG_IMAGE" = true ]; then tag_args+=(-t "$IMAGE:$VERSION"); fi
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
