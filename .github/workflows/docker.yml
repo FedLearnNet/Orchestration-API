@@ -23,8 +23,24 @@ env:
   IMAGE: ghcr.io/fedlearnnet/orchestration-api/orch-api
 
 jobs:
+  # Version from pom.xml and whether it gets an image tag and a release, see FedLearnNet/.github/actions/version
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_image: ${{ steps.version.outputs.tag_image }}
+      release: ${{ steps.version.outputs.release }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        uses: FedLearnNet/.github/actions/version@main
+
   image:
-    # main -> latest, develop -> staging, feature/x -> feature-x, to try a branch without merging it
+    # main -> latest, develop -> staging, feature/x -> feature-x, to try a branch without merging it.
+    # main and develop builds are also tagged with the version.
+    needs: version
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -50,21 +66,44 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG_IMAGE: ${{ needs.version.outputs.tag_image }}
         run: |
           case "$GITHUB_REF_NAME" in
             main) tag=latest ;;
             develop) tag=staging ;;
             *) tag="${GITHUB_REF_NAME//\//-}" ;;
           esac
+          tag_args=(-t "$IMAGE:$tag" -t "$IMAGE:$tag-${GITHUB_SHA::7}")
+          if [ "$TAG_IMAGE" = true ]; then tag_args+=(-t "$IMAGE:$VERSION"); fi
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --provenance=false \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-            -t "$IMAGE:$tag" \
-            -t "$IMAGE:$tag-${GITHUB_SHA::7}" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            "${tag_args[@]}" \
             -f src/main/docker/Dockerfile.jvm \
             --push .
+
+  # First build of a release candidate or release: git tag and GitHub release
+  release:
+    needs: [version, image]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$VERSION" --generate-notes --prerelease="$PRERELEASE"
 
   # Vulnerability scan after every build (results under Security → Code scanning)
   scan:

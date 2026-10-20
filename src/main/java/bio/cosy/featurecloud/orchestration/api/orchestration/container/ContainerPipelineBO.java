@@ -67,6 +67,7 @@ public class ContainerPipelineBO {
         Log.infof("Starting container process for pipeline ID: %d",
                 createDTO.getPipelineId());
         enrichConfig(createDTO);
+        createDTO.setAppImage(pipelineImage(createDTO.getAppImage(), config.imagePrefix(), config.imageTag()));
         ensureNotRunningAlready(createDTO);
         try {
             Log.infof("Loading pipeline image: %s", createDTO.getAppImage());
@@ -94,6 +95,14 @@ public class ContainerPipelineBO {
         dockerAppService.startContainer(response.getId());
         Log.infof("Container started successfully with ID: %s", response.getId());
         return response;
+    }
+
+    private String pipelineImage(String requested, String prefix, String tag) {
+        String image = prefix + ":" + tag;
+        if (!image.equals(requested)) {
+            Log.infof("Pipeline image %s requested, starting %s", requested, image);
+        }
+        return image;
     }
 
     private void enrichConfig(StartPipelineDTO createDTO) {
