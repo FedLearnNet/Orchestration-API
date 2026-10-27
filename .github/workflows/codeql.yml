@@ -43,12 +43,12 @@ jobs:
           persist-credentials: false
 
       # build-mode none analyses the sources directly, no Maven build needed
-      - uses: github/codeql-action/init@v4.38.1
+      - uses: github/codeql-action/init@v4.39.0
         with:
           languages: ${{ matrix.language }}
           build-mode: none
 
       # Findings appear under Security → Code scanning and as pull request annotations
-      - uses: github/codeql-action/analyze@v4.38.1
+      - uses: github/codeql-action/analyze@v4.39.0
         with:
           category: /language:${{ matrix.language }}
