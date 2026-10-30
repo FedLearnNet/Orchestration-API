@@ -165,13 +165,6 @@ public class ContainerAppBO {
     public void stopContainer(String containerId, boolean hardCleanup) {
         Log.debugf("Checking if container %s already run and if stop",
                 containerId);
-
-        Container container = dockerAppService.getById(containerId);
-        if (container == null) {
-            Log.warnf("Container with ID %s not found", containerId);
-            return;
-        }
-
         dockerCleanupService.cleanupContainer(containerId, hardCleanup, hardCleanup, true);
     }
 

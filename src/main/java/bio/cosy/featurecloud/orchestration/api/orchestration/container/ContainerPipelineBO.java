@@ -1,13 +1,9 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.container;
 
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
-import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
-import bio.cosy.featurecloud.orchestration.service.DockerPullService;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
+import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
+import bio.cosy.featurecloud.orchestration.service.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.command.CreateContainerResponse;
@@ -20,15 +16,12 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
 public class ContainerPipelineBO {
-
-    @Inject
-    DockerVolumeService dockerVolumeService;
 
     @Inject
     DockerAppService dockerAppService;
@@ -51,7 +44,7 @@ public class ContainerPipelineBO {
     @Inject
     ContainerConfig containerConfig;
 
-    private final Set<String> startedContainers = new HashSet<>();
+    private final Set<String> startedContainers = ConcurrentHashMap.newKeySet();
 
 
     void onShutdown(@Observes ShutdownEvent ev) {
@@ -73,12 +66,12 @@ public class ContainerPipelineBO {
     public CreateContainerResponse startPipeline(StartPipelineDTO createDTO) {
         Log.infof("Starting container process for pipeline ID: %d",
                 createDTO.getPipelineId());
-        //enrhcih config
         enrichConfig(createDTO);
+        createDTO.setAppImage(pipelineImage(createDTO.getAppImage(), config.imagePrefix(), config.imageTag()));
         ensureNotRunningAlready(createDTO);
         try {
-            Log.infof("Loading application image: %s", createDTO.getAppImage());
-            dockerPullService.loadApplicationImage(createDTO.getAppImage());
+            Log.infof("Loading pipeline image: %s", createDTO.getAppImage());
+            dockerPullService.loadPipelineImage(createDTO.getAppImage());
         } catch (NotFoundException e) {
             Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
             throw new NotFoundException(e.getMessage());
@@ -87,26 +80,46 @@ public class ContainerPipelineBO {
             throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
-        CreateContainerResponse response;
-        response = dockerAppService.startPipeline(createDTO, config.hostRemove());
+        CreateContainerResponse response = dockerAppService.createPipeline(createDTO, config.hostRemove());
 
-        // The build pipeline pulls and pushes images, so it always needs internet access
-        dockerNetworkService.connectContainerToNetworks(response.getId(),
-                new ContainerNetworkAccess(true, false, false));
+        // A remote build pulls and pushes images, a local one only reports back to the learning API on the host
+        if (createDTO.getRunMode() == PipelineRunMode.LOCAL_BUILD) {
+            dockerNetworkService.connectContainerToNetworks(response.getId(),
+                    new ContainerNetworkAccess(false, true, false));
+        } else {
+            dockerNetworkService.connectContainerToNetworks(response.getId(),
+                    new ContainerNetworkAccess(true, false, false));
+        }
 
-        Log.infof("Container started successfully with ID: %s", response.getId());
         startedContainers.add(response.getId());
+        dockerAppService.startContainer(response.getId());
+        Log.infof("Container started successfully with ID: %s", response.getId());
         return response;
     }
 
+    private String pipelineImage(String requested, String prefix, String tag) {
+        String image = prefix + ":" + tag;
+        if (!image.equals(requested)) {
+            Log.infof("Pipeline image %s requested, starting %s", requested, image);
+        }
+        return image;
+    }
+
     private void enrichConfig(StartPipelineDTO createDTO) {
+        addEnv(createDTO, "RUN_MODE", createDTO.getRunMode().name());
+        if (createDTO.getRunMode() == PipelineRunMode.LOCAL_BUILD) {
+            addEnv(createDTO, "USE_BUILDX", false);
+            addEnv(createDTO, "DOCKER_LOGIN", false);
+            addEnv(createDTO, "REPO_PATH", config.repoPath());
+            return;
+        }
         if (config.dockerPassword().isEmpty() && config.dockerLogin()) {
             Log.errorf("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");
             throw new BadRequestException("Pipeline configuration is missing required Docker registry password. Please set PIPELINE_DOCKER_PASSWORD environment variable.");
         }
-        if (config.repoToken().isEmpty()) {
-            Log.errorf("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
-            throw new BadRequestException("Pipeline configuration is missing required repository token. Please set PIPELINE_REPO_TOKEN environment variable.");
+        if (config.dockerRegistry().isEmpty()) {
+            Log.errorf("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
+            throw new BadRequestException("Pipeline configuration is missing required Docker registry. Please set PIPELINE_DOCKER_REGISTRY environment variable.");
         }
         addEnv(createDTO, "USE_BUILDX", config.useBuildx());
         addEnv(createDTO, "BUILDX_PLATFORMS", toJsonArray(config.buildxPlatforms()));
@@ -115,11 +128,12 @@ public class ContainerPipelineBO {
         addOptionalEnv(createDTO, "BUILDX_PROVENANCE_MODE", config.buildxProvenanceMode());
         addEnv(createDTO, "COSIGN_SIGN", config.cosignSign());
         addEnv(createDTO, "DOCKER_LOGIN", config.dockerLogin());
-        addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry());
+        addEnv(createDTO, "DOCKER_REGISTRY", config.dockerRegistry().get());
         addEnv(createDTO, "DOCKER_GROUP", config.dockerGroup());
         addEnv(createDTO, "DOCKER_USERNAME", config.dockerUsername());
-        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().get());
-        addEnv(createDTO, "REPO_TOKEN", config.repoToken().get());
+        addEnv(createDTO, "DOCKER_PASSWORD", config.dockerPassword().orElse(""));
+        // only needed to clone private tool repositories
+        addOptionalEnv(createDTO, "REPO_TOKEN", config.repoToken());
         addEnv(createDTO, "REPO_PATH", config.repoPath());
     }
 
@@ -129,6 +143,10 @@ public class ContainerPipelineBO {
 
     private void addOptionalEnv(StartPipelineDTO dto, String key, Optional<?> value) {
         value.ifPresent(v -> dto.addEnvironment(key + "=" + v));
+    }
+
+    public void forgetContainer(String containerId) {
+        startedContainers.remove(containerId);
     }
 
     private void ensureNotRunningAlready(StartPipelineDTO createDTO) {

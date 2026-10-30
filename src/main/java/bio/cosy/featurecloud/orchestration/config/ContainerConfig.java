@@ -36,6 +36,16 @@ public interface ContainerConfig {
     @WithName("file-transfer")
     FileTransfer fileTransfer();
 
+    // Platform images started like apps but pulled from ghcr, e.g. the runner of custom ETL code; exact names, any tag
+    @WithName("runtime-images")
+    @WithDefault("ghcr.io/fedlearnnet/python-tool-api/code-transformer-runtime")
+    List<String> runtimeImages();
+
+    // Name prefixes of images built by local-only pipelines, e.g. custom ETL code; started only when present locally
+    @WithName("local-image-prefixes")
+    @WithDefault("fl-net/code/")
+    List<String> localImagePrefixes();
+
     interface Host {
 
         @WithName("override")

@@ -128,6 +128,22 @@ public class DockerNetworkService {
         }
     }
 
+    public void removeDedicatedNetworksOf(String containerId) {
+        String prefix = "fl-" + containerId + "-network-";
+        for (Network network : dockerClient.listNetworksCmd().exec()) {
+            if (!network.getName().startsWith(prefix)) {
+                continue;
+            }
+            try {
+                disconnectAllContainers(network.getName());
+                dockerClient.removeNetworkCmd(network.getName()).exec();
+                Log.infof("Removed dedicated network %s of removed container %s", network.getName(), containerId);
+            } catch (DockerException ex) {
+                Log.warnf("Failed to remove dedicated network %s: %s", network.getName(), ex.getMessage());
+            }
+        }
+    }
+
     private void disconnectAllContainers(String networkName) {
         Map<String, com.github.dockerjava.api.model.Network.ContainerNetworkConfig> containers;
         try {

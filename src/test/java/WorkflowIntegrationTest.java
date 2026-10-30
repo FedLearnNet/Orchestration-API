@@ -151,12 +151,12 @@ public class WorkflowIntegrationTest {
                 .then()
                 .statusCode(anyOf(is(200), is(204)));
 
-        // 7. Verify no containers with our TEST_IMAGE are still running
+        // 7. Verify no containers of this workflow are left
         given()
                 .when().get("/container/running")
                 .then()
                 .statusCode(200)
-                .body("findAll { it.Image == '" + TEST_IMAGE + "' }.size()", equalTo(0));
+                .body("findAll { it.Labels['featurecloud.workflow.id'] == '" + WORKFLOW_ID + "' }.size()", equalTo(0));
     }
 
     // Start a dumnmy workflow step with needsInternetAccess=false

@@ -22,6 +22,27 @@ public interface DockerService {
     @APIResponse(responseCode = "200", description = "info")
     Info getInfo();
 
+    @GET
+    @Path("registry/images")
+    @Operation(summary = "List repositories and tags in the configured private registry")
+    RegistryImagesDTO getRegistryImages();
+
+    @GET
+    @Path("image/exists")
+    @Operation(summary = "Check whether an application image exists in its registry")
+    boolean imageExistsInRegistry(@QueryParam("name") String name);
+
+    @GET
+    @Path("image/resolve")
+    @Produces("text/plain")
+    @Operation(summary = "Resolve a tool image in the configured build registry")
+    String resolveToolImage(@QueryParam("slug") String slug, @QueryParam("commitHash") String commitHash);
+
+
+    @DELETE
+    @Path("image")
+    @Operation(summary = "Remove a locally container image")
+    Response removeLocalImage(@QueryParam("name") String name);
 
     @DELETE
     @Path("workflow/{workflowId}/cleanup")

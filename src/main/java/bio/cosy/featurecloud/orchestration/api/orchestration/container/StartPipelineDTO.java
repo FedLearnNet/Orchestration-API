@@ -19,6 +19,9 @@ public class StartPipelineDTO implements BaseName {
 
     private List<String> environments = new ArrayList<>();
 
+    @NotNull(message = "runMode cannot be null")
+    private PipelineRunMode runMode = PipelineRunMode.ALL;
+
     public String getBasename() {
         return getPipelineName(pipelineId);
     }
@@ -34,4 +37,5 @@ public class StartPipelineDTO implements BaseName {
             environments.add(env);
         }
     }
+
 }

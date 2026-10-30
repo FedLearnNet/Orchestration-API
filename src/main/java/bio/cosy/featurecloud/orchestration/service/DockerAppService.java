@@ -360,7 +360,7 @@ public class DockerAppService {
     }
 
 
-    public CreateContainerResponse startPipeline(
+    public CreateContainerResponse createPipeline(
             StartPipelineDTO dto, Boolean hostRemove) {
 
         Log.infof("Creating container for pipeline %d",
@@ -397,17 +397,17 @@ public class DockerAppService {
                     .withEnv(dto.getEnvironments())
                     .withHostConfig(hostConfig)
                     .exec();
-            String containerId = container.getId();
-            Log.infof("Starting container with ID: %s", containerId);
-            dockerClient.startContainerCmd(containerId).exec();
-
-
-            Log.infof("Container %s successfully started and running", containerId);
             return container;
         } catch (Exception e) {
-            Log.errorf("Failed to create or start container: %s", e.getMessage());
+            Log.errorf("Failed to create container: %s", e.getMessage());
             throw e;
         }
+    }
+
+    public void startContainer(String containerId) {
+        Log.infof("Starting container with ID: %s", containerId);
+        dockerClient.startContainerCmd(containerId).exec();
+        Log.infof("Container %s successfully started and running", containerId);
     }
 
     public Multi<String> getLogById(String id) {
