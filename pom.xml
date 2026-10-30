@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>de.unihamburg.daibetes</groupId>
     <artifactId>orch-api</artifactId>
-    <version>1.0.0.dev</version>
+    <version>1.1.0.dev</version>
     <packaging>quarkus</packaging>
 
     <properties>
