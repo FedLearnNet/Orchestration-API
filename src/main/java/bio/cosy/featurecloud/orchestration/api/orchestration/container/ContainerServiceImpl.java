@@ -95,6 +95,15 @@ public class ContainerServiceImpl implements ContainerService {
 
     @Override
     @Transactional
+    public ContainerRunDTO getRunOfContainer(String containerId) {
+        return containerRunAO.find("containerId", containerId)
+                .project(ContainerRunDTO.class)
+                .firstResultOptional()
+                .orElseThrow(() -> new NotFoundException("Container run not found"));
+    }
+
+    @Override
+    @Transactional
     public ContainerRunDTO getRun(Long id) {
         return containerRunAO.find("id", id)
                 .project(ContainerRunDTO.class)

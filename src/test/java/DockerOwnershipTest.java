@@ -75,6 +75,29 @@ class DockerOwnershipTest {
     }
 
     @Test
+    void workflowCleanupRemovesItsUnmountedVolumes() {
+        String own = "orch-unmounted-" + UUID.randomUUID();
+        String other = "orch-unmounted-other-" + UUID.randomUUID();
+        try {
+            docker.createVolumeCmd().withName(own).withLabels(labels()).exec();
+            docker.createVolumeCmd().withName(other).withLabels(foreignLabels()).exec();
+
+            cleanup.cleanupWorkflow(WORKFLOW);
+
+            assertThrows(NotFoundException.class, () -> docker.inspectVolumeCmd(own).exec());
+            assertNotNull(docker.inspectVolumeCmd(other).exec());
+        } finally {
+            for (String name : List.of(own, other)) {
+                try {
+                    docker.removeVolumeCmd(name).exec();
+                } catch (NotFoundException ignored) {
+                    // Already removed by the operation under test.
+                }
+            }
+        }
+    }
+
+    @Test
     void volumeCleanupAndListingRespectSystemOwnership() {
         String own = "orch-own-" + UUID.randomUUID();
         String other = "orch-other-" + UUID.randomUUID();

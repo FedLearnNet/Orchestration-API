@@ -24,4 +24,6 @@ public class ContainerRunDTO extends BaseDTO {
     private String containerId;
 
     private ContainerRunStatus status;
+
+    private Integer exitCode;
 }

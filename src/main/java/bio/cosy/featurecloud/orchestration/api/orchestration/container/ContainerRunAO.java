@@ -43,4 +43,12 @@ public class ContainerRunAO implements PanacheRepository<ContainerRunEntity> {
         run.setStatus(status);
         persist(run);
     }
+
+    @Transactional
+    public void recordExit(String containerId, Integer exitCode) {
+        find("containerId", containerId).firstResultOptional().ifPresent(run -> {
+            run.setExitCode(exitCode);
+            run.setStatus(exitCode != null && exitCode == 0 ? ContainerRunStatus.COMPLETED : ContainerRunStatus.FAILED);
+        });
+    }
 }

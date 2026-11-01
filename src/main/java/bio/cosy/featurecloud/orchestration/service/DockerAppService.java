@@ -11,6 +11,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.PullImageResultCallback;
+import com.github.dockerjava.api.exception.ConflictException;
 import com.github.dockerjava.api.model.*;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Multi;
@@ -58,6 +59,13 @@ public class DockerAppService {
         } catch (com.github.dockerjava.api.exception.NotFoundException e) {
             Log.warnf("Container %s is already removed", containerId);
             return true;
+        } catch (ConflictException e) {
+            if (e.getMessage() == null || !e.getMessage().contains("already in progress")) {
+                Log.errorf(e, "Failed to remove container %s: %s", containerId, e.getMessage());
+                return false;
+            }
+            Log.warnf("Removal of container %s is already in progress, waiting for it", containerId);
+            return false;
         } catch (Exception e) {
             Log.errorf(e, "Failed to remove container %s: %s", containerId, e.getMessage());
             return false;
@@ -112,7 +120,8 @@ public class DockerAppService {
                     return new NotFoundException("Container with ID " + id + " not found");
                 });
     }
-    public List<Container> getByStepLabel(String step){
+
+    public List<Container> getByStepLabel(String step) {
         Map<String, String> serviceLabels = LabelsHelper.createLabelsForStepSearch(step);
         Log.infof("Finding containers: labels=%s", serviceLabels);
         return dockerClient.listContainersCmd()
@@ -267,9 +276,9 @@ public class DockerAppService {
         HostConfig hostConfig = HostConfig.newHostConfig()
                 .withMounts(mounts)
                 .withNetworkMode("none");
-                // If we don't set networkMode to none docker auto attaches the
-                // default bridge (with internet access etc)
-                // We add a custom dedicated network later anyways
+        // If we don't set networkMode to none docker auto attaches the
+        // default bridge (with internet access etc)
+        // We add a custom dedicated network later anyways
 
         if (Boolean.TRUE.equals(dto.getNeedsHostAccess())) {
             hostConfig.withExtraHosts("host.docker.internal:host-gateway");
