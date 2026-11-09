@@ -30,6 +30,8 @@ import static bio.cosy.featurecloud.orchestration.service.DockerVolumeService.VO
 @ApplicationScoped
 public class DockerAppService {
 
+    private static final int REMOVAL_WAIT_SECONDS = 30;
+
     @Inject
     DockerClient dockerClient;
 
@@ -65,11 +67,30 @@ public class DockerAppService {
                 return false;
             }
             Log.warnf("Removal of container %s is already in progress, waiting for it", containerId);
-            return false;
+            return awaitRemoved(containerId);
         } catch (Exception e) {
             Log.errorf(e, "Failed to remove container %s: %s", containerId, e.getMessage());
             return false;
         }
+    }
+
+    private boolean awaitRemoved(String containerId) {
+        for (int second = 0; second < REMOVAL_WAIT_SECONDS; second++) {
+            try {
+                dockerClient.inspectContainerCmd(containerId).exec();
+            } catch (com.github.dockerjava.api.exception.NotFoundException e) {
+                Log.infof("Container %s was removed", containerId);
+                return true;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        Log.errorf("Container %s was not removed within %d s", containerId, REMOVAL_WAIT_SECONDS);
+        return false;
     }
 
     public void stopContainer(String containerId) {

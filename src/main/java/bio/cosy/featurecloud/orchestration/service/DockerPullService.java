@@ -13,6 +13,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 @ApplicationScoped
 public class DockerPullService {
     @Inject
@@ -90,25 +93,25 @@ public class DockerPullService {
         String image = qualified(imageName);
         DockerClientRuntimeConfig config = dockerRuntimeConfig.namedDockerClients().get(clientName);
         return config != null && config.enabled() && config.registryUrl()
-            .map(registryurl -> registryurl.replaceFirst("^https?://", "").replaceAll("/+$", ""))
-            .filter(url -> {
-                boolean matches = image.startsWith(url + "/");
-                if (!matches) {
-                    Log.infof("Registry mismatch for Docker client '%s': image registry '%s', normalized configured registry '%s'",
-                            clientName, image, url);
-                }
-                return matches;
-            })
-            .isPresent();
+                .map(registryurl -> registryurl.replaceFirst("^https?://", "").replaceAll("/+$", ""))
+                .filter(url -> {
+                    boolean matches = image.startsWith(url + "/");
+                    if (!matches) {
+                        Log.infof("Registry mismatch for Docker client '%s': image registry '%s', normalized configured registry '%s'",
+                                clientName, image, url);
+                    }
+                    return matches;
+                })
+                .isPresent();
     }
 
 
     private void loadApplicationImage(String imageName, DockerClient client, String config) throws Exception {
         Log.infof("Try Pulling Docker image: %s at %s", imageName, config);
-        try {
-            client.pullImageCmd(imageName)
-                    .exec(new PullImageResultCallback())
-                    .awaitCompletion();
+        try (PullImageResultCallback pull = client.pullImageCmd(imageName).exec(new PullImageResultCallback())) {
+            if (!pull.awaitCompletion(containerConfig.pullTimeout().toMillis(), TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Pull of " + imageName + " did not finish within " + containerConfig.pullTimeout());
+            }
             Log.infof("Successfully pulled Docker image: %s", imageName);
         } catch (Exception e) {
             if (isAvailableLocally(imageName, client)) {

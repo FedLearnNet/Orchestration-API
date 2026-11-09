@@ -9,22 +9,42 @@ import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.ContainerNetwork;
 import com.github.dockerjava.api.model.Network;
 import io.quarkus.logging.Log;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class DockerNetworkService {
 
     private static final Set<String> PREDEFINED_NETWORKS = Set.of("bridge", "host", "none");
 
+    // fl-<owner container id>-network-<uuid>, see createDedicatedNetworkAndConnect
+    private static final Pattern DEDICATED_NETWORK = Pattern.compile("^fl-([0-9a-f]{64})-network-");
+
     @Inject
     DockerClient dockerClient;
 
     @Inject
     ContainerConfig containerConfig;
+
+    void onStartup(@Observes StartupEvent event) {
+        if (!containerConfig.network().cleanupOrphans()) {
+            Log.info("Orphaned dedicated network cleanup is disabled");
+            return;
+        }
+        try {
+            removeOrphanedDedicatedNetworks();
+        } catch (Exception ex) {
+            // Docker being unreachable must not keep the API from starting
+            Log.warnf(ex, "Failed to remove orphaned dedicated networks: %s", ex.getMessage());
+        }
+    }
 
     /**
      * Finds all Docker networks that match the configured network names
@@ -98,6 +118,16 @@ public class DockerNetworkService {
      */
     public void removeDedicatedNetwork(String containerId) {
         Log.infof("Removing dedicated networks for container %s", containerId);
+        try {
+            removeAttachedDedicatedNetworks(containerId);
+        } catch (NotFoundException ex) {
+            // Auto-removed containers vanish right after the stop, their networks are found by name below
+            Log.infof("Container %s is already removed, removing its dedicated networks by name", containerId);
+        }
+        removeDedicatedNetworksOf(containerId);
+    }
+
+    private void removeAttachedDedicatedNetworks(String containerId) {
         var inspect = dockerClient.inspectContainerCmd(containerId).exec();
         var networkSettings = inspect.getNetworkSettings();
         if (networkSettings == null || networkSettings.getNetworks() == null) {
@@ -131,16 +161,46 @@ public class DockerNetworkService {
     public void removeDedicatedNetworksOf(String containerId) {
         String prefix = "fl-" + containerId + "-network-";
         for (Network network : dockerClient.listNetworksCmd().exec()) {
-            if (!network.getName().startsWith(prefix)) {
-                continue;
+            if (network.getName() != null && network.getName().startsWith(prefix)) {
+                removeNetwork(network.getName());
             }
-            try {
-                disconnectAllContainers(network.getName());
-                dockerClient.removeNetworkCmd(network.getName()).exec();
-                Log.infof("Removed dedicated network %s of removed container %s", network.getName(), containerId);
-            } catch (DockerException ex) {
-                Log.warnf("Failed to remove dedicated network %s: %s", network.getName(), ex.getMessage());
+        }
+    }
+
+    public int removeOrphanedDedicatedNetworks() {
+        int removed = 0;
+        for (Network network : dockerClient.listNetworksCmd().exec()) {
+            Matcher matcher = DEDICATED_NETWORK.matcher(Objects.requireNonNullElse(network.getName(), ""));
+            if (matcher.find() && !containerExists(matcher.group(1)) && removeNetwork(network.getName())) {
+                removed++;
             }
+        }
+        Log.infof("Removed %d orphaned dedicated networks", removed);
+        return removed;
+    }
+
+    private boolean containerExists(String containerId) {
+        try {
+            dockerClient.inspectContainerCmd(containerId).exec();
+            return true;
+        } catch (NotFoundException ex) {
+            return false;
+        }
+    }
+
+    private boolean removeNetwork(String networkName) {
+        try {
+            // Participants such as the learning API still hold endpoints and block the removal
+            disconnectAllContainers(networkName);
+            dockerClient.removeNetworkCmd(networkName).exec();
+            Log.infof("Removed dedicated network %s", networkName);
+            return true;
+        } catch (NotFoundException ex) {
+            Log.debugf("Dedicated network %s is already removed", networkName);
+            return false;
+        } catch (DockerException ex) {
+            Log.warnf("Failed to remove dedicated network %s: %s", networkName, ex.getMessage());
+            return false;
         }
     }
 
@@ -269,6 +329,7 @@ public class DockerNetworkService {
         learningApi().ifPresent(participants::add);
         if (access.federatedLearning()) {
             participants.add(resolveController());
+            relay().ifPresent(participants::add);
         }
         boolean internalOnly = access.internalOnly();
         // Network names are capped at 128 chars, we cut to 125 chars
@@ -298,13 +359,24 @@ public class DockerNetworkService {
 
         String networkId = created.getId();
         Log.infof("Created dedicated network '%s' with id %s", networkName, networkId);
-        connectContainerToNetwork(containerId, networkId);
-
-        for (String participant : participants) {
-            connectContainerToNetwork(participant, networkId);
+        try {
+            connectContainerToNetwork(containerId, networkId);
+            for (String participant : participants) {
+                connectContainerToNetwork(participant, networkId);
+            }
+        } catch (RuntimeException ex) {
+            // Nothing tears the network down once the start failed, so do it here
+            removeNetwork(networkId);
+            throw ex;
         }
     }
 
+
+    private Optional<String> relay() {
+        return containerConfig.network().relay()
+                .filter(participant -> !participant.isBlank())
+                .map(value -> resolveContainerName(value, "container.network.relay"));
+    }
 
     private String resolveController() {
         return containerConfig.network().controller()

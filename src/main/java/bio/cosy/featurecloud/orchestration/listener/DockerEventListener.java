@@ -39,7 +39,7 @@ public class DockerEventListener {
                         .withEventTypeFilter(EventType.CONTAINER)
                         .withLabelFilter(labels)
                         //TODO ONLY FOR NOW
-                        .withEventFilter("die")
+                        .withEventFilter("die", "destroy")
                         .exec(new ResultCallback.Adapter<Event>() {
                             @Override
                             public void onStart(Closeable stream) {
@@ -87,6 +87,10 @@ public class DockerEventListener {
             id = event.getId();
         }
         if (StringUtils.isEmpty(id)) {
+            return;
+        }
+        if ("destroy".equals(event.getAction()) || "destroy".equals(event.getStatus())) {
+            bus.send(DockerEvents.CONTAINER_DESTROYED, id);
             return;
         }
         Map<String, String> attributes = event.getActor().getAttributes() == null
