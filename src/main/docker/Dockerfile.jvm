@@ -88,7 +88,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 # Pull OS security fixes not yet in the base image
 USER root
 RUN microdnf -y upgrade --refresh \
-    && microdnf clean all \
+    && microdnf clean all
 
 # We make four distinct layers so if there are application changes the library layers can be re-used
 COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
