@@ -6,9 +6,7 @@ services:
       POSTGRES_DB: orch-management
       POSTGRES_USER: user
     volumes:
-      - orch-api-db-volume:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - orch-api-db-volume:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U user -d orch-management" ]
       interval: 5s
