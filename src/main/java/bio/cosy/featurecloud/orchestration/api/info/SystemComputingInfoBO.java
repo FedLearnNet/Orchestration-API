@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @ApplicationScoped
@@ -61,17 +63,19 @@ public class SystemComputingInfoBO {
                 dto.setModelName(lines.length > 1 ? lines[1].trim() : output);
             } else {
                 int linuxCoreCount = 0;
-                String modelName = "Unknown CPU";
+                Map<String, String> cpuInfo = new HashMap<>();
                 try (Stream<String> stream = Files.lines(Paths.get("/proc/cpuinfo"))) {
                     for (String line : stream.toList()) {
-                        if (line.startsWith("processor")) {
+                        int colon = line.indexOf(':');
+                        if (colon < 0) continue;
+                        String key = line.substring(0, colon).trim();
+                        if (key.equals("processor")) {
                             linuxCoreCount++;
-                        } else if (line.startsWith("model name") || line.startsWith("Hardware") || line.startsWith("Processor")) {
-                            modelName = line.substring(line.indexOf(":") + 1).trim();
                         }
+                        cpuInfo.putIfAbsent(key, line.substring(colon + 1).trim());
                     }
                 }
-                dto.setModelName(modelName);
+                dto.setModelName(linuxCpuName(cpuInfo));
                 if (linuxCoreCount > 0) {
                     nativeCoreCount = linuxCoreCount;
                 }
@@ -223,6 +227,90 @@ public class SystemComputingInfoBO {
         }
         return usage;
     }
+
+    private String linuxCpuName(Map<String, String> cpuInfo) {
+        String modelName = cpuInfo.get("model name");
+        if (modelName != null && !modelName.isBlank()) return modelName;
+
+        String boardModel = readDeviceTreeModel();
+        if (boardModel != null) return boardModel;
+
+        for (String key : List.of("Hardware", "Processor")) {
+            String value = cpuInfo.get(key);
+            if (value != null && !value.isBlank()) return value;
+        }
+
+        Integer implementer = parseHex(cpuInfo.get("CPU implementer"));
+        if (implementer == null) return "Unknown CPU";
+        Integer part = parseHex(cpuInfo.get("CPU part"));
+
+        if (implementer == 0x61) return "Apple Silicon";
+        String vendor = ARM_IMPLEMENTERS.getOrDefault(implementer, "ARM-compatible");
+        String core = implementer == 0x41 && part != null ? ARM_PARTS.get(part) : null;
+        if (core != null) return vendor + " " + core;
+        if (part == null || part == 0) return vendor + " CPU";
+        return vendor + " CPU (part 0x" + Integer.toHexString(part) + ")";
+    }
+
+    private String readDeviceTreeModel() {
+        for (String path : List.of("/proc/device-tree/model", "/sys/firmware/devicetree/base/model")) {
+            try {
+                String model = Files.readString(Paths.get(path)).replace("\0", "").trim();
+                if (!model.isEmpty()) return model;
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Integer parseHex(String value) {
+        if (value == null) return null;
+        try {
+            return Integer.decode(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static final Map<Integer, String> ARM_IMPLEMENTERS = Map.ofEntries(
+            Map.entry(0x41, "ARM"),
+            Map.entry(0x42, "Broadcom"),
+            Map.entry(0x43, "Cavium"),
+            Map.entry(0x46, "Fujitsu"),
+            Map.entry(0x48, "HiSilicon"),
+            Map.entry(0x4e, "NVIDIA"),
+            Map.entry(0x50, "Applied Micro"),
+            Map.entry(0x51, "Qualcomm"),
+            Map.entry(0x53, "Samsung"),
+            Map.entry(0x6d, "Microsoft"),
+            Map.entry(0xc0, "Ampere")
+    );
+
+    private static final Map<Integer, String> ARM_PARTS = Map.ofEntries(
+            Map.entry(0xd03, "Cortex-A53"),
+            Map.entry(0xd04, "Cortex-A35"),
+            Map.entry(0xd05, "Cortex-A55"),
+            Map.entry(0xd07, "Cortex-A57"),
+            Map.entry(0xd08, "Cortex-A72"),
+            Map.entry(0xd09, "Cortex-A73"),
+            Map.entry(0xd0a, "Cortex-A75"),
+            Map.entry(0xd0b, "Cortex-A76"),
+            Map.entry(0xd0c, "Neoverse-N1"),
+            Map.entry(0xd0d, "Cortex-A77"),
+            Map.entry(0xd40, "Neoverse-V1"),
+            Map.entry(0xd41, "Cortex-A78"),
+            Map.entry(0xd44, "Cortex-X1"),
+            Map.entry(0xd46, "Cortex-A510"),
+            Map.entry(0xd47, "Cortex-A710"),
+            Map.entry(0xd48, "Cortex-X2"),
+            Map.entry(0xd49, "Neoverse-N2"),
+            Map.entry(0xd4f, "Neoverse-V2"),
+            Map.entry(0xd80, "Cortex-A520"),
+            Map.entry(0xd81, "Cortex-A720"),
+            Map.entry(0xd82, "Cortex-X4"),
+            Map.entry(0xd84, "Neoverse-V3"),
+            Map.entry(0xd8e, "Neoverse-N3")
+    );
 
     private boolean isLinux() {
         return System.getProperty("os.name").toLowerCase().contains("linux");
