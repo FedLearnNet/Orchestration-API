@@ -1,7 +1,7 @@
 package bio.cosy.featurecloud.orchestration.api.info;
 
 import bio.cosy.featurecloud.orchestration.service.DockerOrchestration;
-import com.github.dockerjava.api.model.Info;
+import com.github.dockerjava.api.model.*;
 import com.sun.management.OperatingSystemMXBean;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,21 +25,23 @@ public class SystemComputingInfoBO {
         SystemComputingInfoDTO result = new SystemComputingInfoDTO();
 
         Info dockerInfo = null;
+        List<Statistics> containerStats = null;
         try {
             dockerInfo = dockerOrchestration.getInfo();
+            containerStats = dockerOrchestration.loadRunningContainerStats();
         } catch (Exception e) {
             Log.warn("Could not retrieve Docker info, falling back entirely to native container metrics.", e);
         }
 
-        result.setCpuDetails(getCpuDetails(dockerInfo));
-        result.setRamDetails(getRamDetails(dockerInfo));
+        result.setCpuDetails(getCpuDetails(dockerInfo, containerStats));
+        result.setRamDetails(getRamDetails(dockerInfo, containerStats));
 
         result.setGPU(getGpuDetails());
 
         return result;
     }
 
-    public CpuComputingInfoDTO getCpuDetails(Info dockerInfo) {
+    public CpuComputingInfoDTO getCpuDetails(Info dockerInfo, List<Statistics> containerStats) {
         CpuComputingInfoDTO dto = new CpuComputingInfoDTO();
         String os = System.getProperty("os.name").toLowerCase();
         dto.setArchitecture(System.getProperty("os.arch"));
@@ -84,21 +86,32 @@ public class SystemComputingInfoBO {
             dto.setLogicalCores(nativeCoreCount);
         }
 
+        int cores = dto.getLogicalCores();
+        double usedCores;
+        if (containerStats != null) {
+            usedCores = containerStats.stream().mapToDouble(stats -> containerCpuCores(stats, cores)).sum();
+        } else {
+            // without Docker: load of the JVM host, unknown on first call
+            double load = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class).getCpuLoad();
+            usedCores = Math.max(0, load) * cores;
+        }
+        usedCores = Math.min(usedCores, cores);
+
+        dto.setUsedCores(roundToTwoDecimals(usedCores));
+        dto.setFreeCores(roundToTwoDecimals(cores - usedCores));
+        dto.setUsagePercent(cores > 0 ? roundToTwoDecimals(usedCores / cores * 100) : 0);
+
         return dto;
     }
 
-    public RamComputingInfoDTO getRamDetails(Info dockerInfo) {
+
+    public RamComputingInfoDTO getRamDetails(Info dockerInfo, List<Statistics> containerStats) {
         RamComputingInfoDTO dto = new RamComputingInfoDTO();
-        String os = System.getProperty("os.name").toLowerCase();
+        boolean linux = isLinux();
 
-        double nativeTotalGb = 0;
-        double nativeAvailableGb = 0;
-
-        if (os.contains("mac") || os.contains("win")) {
-            OperatingSystemMXBean osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
-            nativeTotalGb = bytesToGb(osBean.getTotalMemorySize());
-            nativeAvailableGb = bytesToGb(osBean.getFreeMemorySize());
-        } else {
+        double nativeTotalGb;
+        double nativeAvailableGb;
+        if (linux) {
             long totalKb = 0;
             long availableKb = 0;
             try (Stream<String> stream = Files.lines(Paths.get("/proc/meminfo"))) {
@@ -109,23 +122,32 @@ public class SystemComputingInfoBO {
                         availableKb = parseKb(line);
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Log.warn("Could not read /proc/meminfo: " + e.getMessage());
             }
             nativeTotalGb = kbToGb(totalKb);
             nativeAvailableGb = kbToGb(availableKb);
+        } else {
+            OperatingSystemMXBean osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
+            nativeTotalGb = bytesToGb(osBean.getTotalMemorySize());
+            nativeAvailableGb = bytesToGb(osBean.getFreeMemorySize());
         }
 
-        double finalTotalGb = nativeTotalGb;
-        if (dockerInfo != null && dockerInfo.getMemTotal() != null) {
-            finalTotalGb = bytesToGb(dockerInfo.getMemTotal());
+        double totalGb = nativeTotalGb;
+        double availableGb = nativeAvailableGb;
+        if (dockerInfo != null && dockerInfo.getMemTotal() != null && containerStats != null) {
+            totalGb = bytesToGb(dockerInfo.getMemTotal());
+            double containerUsedGb = bytesToGb(containerStats.stream().mapToLong(this::containerMemoryBytes).sum());
+            availableGb = totalGb - containerUsedGb;
+            if (linux && nativeAvailableGb > 0) {
+                availableGb = Math.min(availableGb, nativeAvailableGb);
+            }
         }
+        availableGb = Math.clamp(availableGb, 0, totalGb);
 
-        double finalUsedGb = finalTotalGb - nativeAvailableGb;
-        if (finalUsedGb < 0) finalUsedGb = 0;
-
-        dto.setTotalMemoryGb(roundToTwoDecimals(finalTotalGb));
-        dto.setAvailableMemoryGb(roundToTwoDecimals(nativeAvailableGb));
-        dto.setUsedMemoryGb(roundToTwoDecimals(finalUsedGb));
+        dto.setTotalMemoryGb(roundToTwoDecimals(totalGb));
+        dto.setAvailableMemoryGb(roundToTwoDecimals(availableGb));
+        dto.setUsedMemoryGb(roundToTwoDecimals(totalGb - availableGb));
 
         return dto;
     }
@@ -166,6 +188,44 @@ public class SystemComputingInfoBO {
             Log.error("Could not execute nvidia-smi: " + e.getMessage());
         }
         return gpus;
+    }
+
+    private double containerCpuCores(Statistics stats, int fallbackCores) {
+        CpuStatsConfig cpu = stats.getCpuStats();
+        CpuStatsConfig preCpu = stats.getPreCpuStats();
+        if (cpu == null || preCpu == null || cpu.getCpuUsage() == null || preCpu.getCpuUsage() == null
+                || cpu.getCpuUsage().getTotalUsage() == null || preCpu.getCpuUsage().getTotalUsage() == null
+                || cpu.getSystemCpuUsage() == null || preCpu.getSystemCpuUsage() == null) {
+            return 0;
+        }
+        long cpuDelta = cpu.getCpuUsage().getTotalUsage() - preCpu.getCpuUsage().getTotalUsage();
+        long systemDelta = cpu.getSystemCpuUsage() - preCpu.getSystemCpuUsage();
+        if (cpuDelta <= 0 || systemDelta <= 0) {
+            return 0;
+        }
+        long onlineCpus = cpu.getOnlineCpus() != null ? cpu.getOnlineCpus() : fallbackCores;
+        return (double) cpuDelta / systemDelta * onlineCpus;
+    }
+
+
+    private long containerMemoryBytes(Statistics stats) {
+        MemoryStatsConfig memory = stats.getMemoryStats();
+        if (memory == null || memory.getUsage() == null) {
+            return 0;
+        }
+        long usage = memory.getUsage();
+        StatsConfig details = memory.getStats();
+        if (details != null) {
+            Long inactiveFile = details.getInactiveFile() != null ? details.getInactiveFile() : details.getTotalInactiveFile();
+            if (inactiveFile != null && inactiveFile < usage) {
+                return usage - inactiveFile;
+            }
+        }
+        return usage;
+    }
+
+    private boolean isLinux() {
+        return System.getProperty("os.name").toLowerCase().contains("linux");
     }
 
     private long parseKb(String line) {
