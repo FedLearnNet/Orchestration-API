@@ -4,6 +4,7 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import io.smallrye.config.WithName;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +36,10 @@ public interface ContainerConfig {
 
     @WithName("file-transfer")
     FileTransfer fileTransfer();
+
+    @WithName("pull-timeout")
+    @WithDefault("15m")
+    Duration pullTimeout();
 
     // Platform images started like apps but pulled from ghcr, e.g. the runner of custom ETL code; exact names, any tag
     @WithName("runtime-images")
@@ -79,23 +84,29 @@ public interface ContainerConfig {
         @WithName("names")
         Optional<List<String>> names();
 
-
         //Learning API container attached to the dedicated network created for every started
         // container. Required format: <container>:<port>, e.g. local-learning-api:8080.
         @WithName("learning")
         Optional<String> learning();
-
 
         // only attached when the started container asked for
         // federated learning access. Required format: <container>:<port>, e.g. controller:8001.
         @WithName("controller")
         Optional<String> controller();
 
+        @WithName("relay")
+        Optional<String> relay();
+
         // Attach containers to the configured non-internal networks even when they were started
         //without internet access. Only meant for local/dev setups.
         @WithName("always-bridge")
         @WithDefault("false")
         boolean alwaysBridge();
+
+        // Remove dedicated networks whose container is gone on startup
+        @WithName("cleanup-orphans")
+        @WithDefault("true")
+        boolean cleanupOrphans();
     }
 
     interface FileTransferVolume {

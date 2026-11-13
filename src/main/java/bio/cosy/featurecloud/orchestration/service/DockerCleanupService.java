@@ -101,6 +101,8 @@ public class DockerCleanupService {
         for (Container container : containers) {
             cleanupContainer(container.getId(), true, true, true);
         }
+        // Volumes no container mounts, e.g. inputs of a node that never started
+        dockerVolumeService.cleanupWorkflowVolumes(workflowId);
     }
 
     public void cleanupWorkflowNode(Long workflowNodeId) {

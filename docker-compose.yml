@@ -38,6 +38,13 @@ services:
     depends_on:
       orch-api-db:
         condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu, utility, compute ]
     networks:
       - orch-network
   

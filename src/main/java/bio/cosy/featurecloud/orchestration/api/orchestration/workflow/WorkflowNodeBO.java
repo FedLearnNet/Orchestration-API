@@ -249,6 +249,7 @@ public class WorkflowNodeBO {
             Log.warnf("Container with ID %s not found", containerId);
             return;
         }
-        dockerCleanupService.cleanupContainer(containerId, hardCleanup, hardCleanup, true);
+        // Always remove the stopped app; outputs may still be needed by a later workflow step.
+        dockerCleanupService.cleanupContainer(containerId, true, hardCleanup, true);
     }
 }

@@ -50,6 +50,13 @@ public interface ContainerService {
     List<ContainerRunDTO> listRuns();
 
     @GET
+    @Path("run/container/{containerId}")
+    @Operation(summary = "get the saved run of a container, also after the container was removed")
+    @APIResponse(responseCode = "200", description = "Container run")
+    @APIResponse(responseCode = "404", description = "No run for this container")
+    ContainerRunDTO getRunOfContainer(@PathParam("containerId") String containerId);
+
+    @GET
     @Path("run/{id}")
     @Operation(summary = "get specific saved container")
     @APIResponse(responseCode = "200", description = "Container")

@@ -1,3 +1,5 @@
+import bio.cosy.featurecloud.orchestration.api.orchestration.container.ContainerAppBO;
+import bio.cosy.featurecloud.orchestration.api.orchestration.workflow.WorkflowNodeBO;
 import bio.cosy.featurecloud.orchestration.docker.DockerLabels;
 import bio.cosy.featurecloud.orchestration.docker.LabelsHelper;
 import bio.cosy.featurecloud.orchestration.service.DockerAppService;
@@ -5,17 +7,15 @@ import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
 import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.exception.NotFoundException;
+import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.Volume;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -27,10 +27,63 @@ class DockerOwnershipTest {
     private static final long NODE = 700003L;
     private static final String STEP = "ownership-regression";
 
-    @Inject DockerClient docker;
-    @Inject DockerAppService apps;
-    @Inject DockerCleanupService cleanup;
-    @Inject DockerVolumeService volumes;
+    @Inject
+    DockerClient docker;
+    @Inject
+    DockerAppService apps;
+    @Inject
+    DockerCleanupService cleanup;
+    @Inject
+    DockerVolumeService volumes;
+    @Inject
+    ContainerAppBO appBO;
+    @Inject
+    WorkflowNodeBO workflowBO;
+
+    @Test
+    void appCompletionRemovesContainerButKeepsOutputsForLaterSteps() {
+        assertCompletionCleanup(false);
+    }
+
+    @Test
+    void workflowStepCompletionRemovesContainerButKeepsOutputsForLaterSteps() {
+        assertCompletionCleanup(true);
+    }
+
+    private void assertCompletionCleanup(boolean workflowStep) {
+        String volume = "orch-completion-" + UUID.randomUUID();
+        String container = null;
+        try {
+            docker.createVolumeCmd().withName(volume).withLabels(labels()).exec();
+            container = docker.createContainerCmd("busybox:1.37")
+                    .withLabels(labels()).withCmd("sleep", "300")
+                    .withHostConfig(HostConfig.newHostConfig().withNetworkMode("none")
+                            .withBinds(new Bind(volume, new Volume("/output"))))
+                    .exec().getId();
+            docker.startContainerCmd(container).exec();
+
+            if (workflowStep) {
+                workflowBO.stopContainer(container, false);
+            } else {
+                appBO.stopContainer(container, false);
+            }
+
+            String removed = container;
+            assertThrows(NotFoundException.class, () -> docker.inspectContainerCmd(removed).exec());
+            assertNotNull(docker.inspectVolumeCmd(volume).exec());
+            cleanup.cleanupWorkflow(WORKFLOW);
+            assertThrows(NotFoundException.class, () -> docker.inspectVolumeCmd(volume).exec());
+        } finally {
+            if (container != null) {
+                removeTestContainer(container);
+            }
+            try {
+                docker.removeVolumeCmd(volume).exec();
+            } catch (NotFoundException ignored) {
+                // Final workflow cleanup already removed the retained outputs.
+            }
+        }
+    }
 
     @Test
     void lookupsExcludeOtherSystemsAndUnlabelledContainers() {
@@ -71,6 +124,29 @@ class DockerOwnershipTest {
             assertTrue(docker.inspectContainerCmd(other).exec().getState().getRunning());
         } finally {
             created.forEach(this::removeTestContainer);
+        }
+    }
+
+    @Test
+    void workflowCleanupRemovesItsUnmountedVolumes() {
+        String own = "orch-unmounted-" + UUID.randomUUID();
+        String other = "orch-unmounted-other-" + UUID.randomUUID();
+        try {
+            docker.createVolumeCmd().withName(own).withLabels(labels()).exec();
+            docker.createVolumeCmd().withName(other).withLabels(foreignLabels()).exec();
+
+            cleanup.cleanupWorkflow(WORKFLOW);
+
+            assertThrows(NotFoundException.class, () -> docker.inspectVolumeCmd(own).exec());
+            assertNotNull(docker.inspectVolumeCmd(other).exec());
+        } finally {
+            for (String name : List.of(own, other)) {
+                try {
+                    docker.removeVolumeCmd(name).exec();
+                } catch (NotFoundException ignored) {
+                    // Already removed by the operation under test.
+                }
+            }
         }
     }
 

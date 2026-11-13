@@ -32,6 +32,9 @@ public class ContainerRunEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private ContainerRunStatus status;
 
+    @Column(name = "exit_code")
+    private Integer exitCode;
+
     @OneToMany(mappedBy = "containerRun", cascade = CascadeType.ALL)
     private Set<ContainerLogEntity> logs;
 }

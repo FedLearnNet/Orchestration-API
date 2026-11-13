@@ -2,6 +2,7 @@ package bio.cosy.featurecloud.orchestration.listener;
 
 import bio.cosy.featurecloud.orchestration.docker.DockerLabels;
 import bio.cosy.featurecloud.orchestration.docker.LabelsHelper;
+import bio.cosy.featurecloud.orchestration.events.ContainerDiedEvent;
 import bio.cosy.featurecloud.orchestration.events.DockerEvents;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
@@ -32,14 +33,13 @@ public class DockerEventListener {
     public Multi<Event> events() {
         return Multi.createFrom().emitter(emitter -> {
             try {
+                // Every container of this system, so app runs record their exit code too
                 Map<String, String> labels = LabelsHelper.createLabels();
-                //TODO ONLY FOR NOW
-                labels.put(DockerLabels.FEATURE_CLOUD_PIPELINE_VERSION.toString(), PIPELINE_VERSION);
                 dockerClient.eventsCmd()
                         .withEventTypeFilter(EventType.CONTAINER)
                         .withLabelFilter(labels)
                         //TODO ONLY FOR NOW
-                        .withEventFilter("die")
+                        .withEventFilter("die", "destroy")
                         .exec(new ResultCallback.Adapter<Event>() {
                             @Override
                             public void onStart(Closeable stream) {
@@ -89,7 +89,22 @@ public class DockerEventListener {
         if (StringUtils.isEmpty(id)) {
             return;
         }
-        bus.send(DockerEvents.CONTAINER_DIED, id);
+        if ("destroy".equals(event.getAction()) || "destroy".equals(event.getStatus())) {
+            bus.send(DockerEvents.CONTAINER_DESTROYED, id);
+            return;
+        }
+        Map<String, String> attributes = event.getActor().getAttributes() == null
+                ? Map.of() : event.getActor().getAttributes();
+        bus.send(DockerEvents.CONTAINER_DIED, new ContainerDiedEvent(id, exitCodeOf(attributes),
+                PIPELINE_VERSION.equals(attributes.get(DockerLabels.FEATURE_CLOUD_PIPELINE_VERSION.toString()))));
+    }
+
+    private static Integer exitCodeOf(Map<String, String> attributes) {
+        try {
+            return attributes.containsKey("exitCode") ? Integer.valueOf(attributes.get("exitCode")) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
 }

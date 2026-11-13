@@ -165,7 +165,8 @@ public class ContainerAppBO {
     public void stopContainer(String containerId, boolean hardCleanup) {
         Log.debugf("Checking if container %s already run and if stop",
                 containerId);
-        dockerCleanupService.cleanupContainer(containerId, hardCleanup, hardCleanup, true);
+        // Always remove the stopped app; outputs may still be needed by a later workflow step.
+        dockerCleanupService.cleanupContainer(containerId, true, hardCleanup, true);
     }
 
 
