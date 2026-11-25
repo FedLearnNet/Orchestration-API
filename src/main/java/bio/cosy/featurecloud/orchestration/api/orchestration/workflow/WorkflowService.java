@@ -1,6 +1,6 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.workflow;
 
-import com.github.dockerjava.api.command.CreateContainerResponse;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
 import io.quarkus.security.Authenticated;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
@@ -17,10 +17,12 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 public interface WorkflowService {
 
 
+    // Returns AppRun, serialized like docker-java's CreateContainerResponse;
+    // see the note on ContainerService.
     @POST
     @Operation(summary = "Start a new container")
     @APIResponse(responseCode = "200", description = "Container")
-    CreateContainerResponse startWorkflow(StartWorkflowNodeDTO createDTO,
+    AppRun startWorkflow(StartWorkflowNodeDTO createDTO,
                                           @QueryParam("changeUrl") boolean changeUrl,
                                           @QueryParam("path") String path,
                                           @QueryParam("port") @DefaultValue("8080") Integer port);

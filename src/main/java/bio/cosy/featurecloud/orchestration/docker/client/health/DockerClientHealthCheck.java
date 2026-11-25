@@ -101,8 +101,21 @@ public class DockerClientHealthCheck implements HealthCheck {
         return clientConfig.connectTimeout();
     }
 
+    // Same reasoning/property as DockerHealthCheck's healthCheckEnabled:
+    // under the Kubernetes execution backend there's no Docker daemon to
+    // ping, and whether init() above actually finds a DockerClient bean to
+    // register turned out to depend on Arc container startup timing (an
+    // NPE some runs, a real client that then fails to connect on others) —
+    // gating call() itself on this property is the deterministic fix,
+    // rather than relying on init() failing.
+    @org.eclipse.microprofile.config.inject.ConfigProperty(name = "orch.docker.health-check", defaultValue = "true")
+    boolean healthCheckEnabled;
+
     @Override
     public HealthCheckResponse call() {
+        if (!healthCheckEnabled) {
+            return HealthCheckResponse.named(HEALTH_CHECK_NAME).up().build();
+        }
         HealthCheckResponseBuilder builder = HealthCheckResponse.named(HEALTH_CHECK_NAME).up();
 
         for (Map.Entry<String, DockerClient> entry : clients.entrySet()) {

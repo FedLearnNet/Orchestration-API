@@ -14,6 +14,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -33,7 +34,15 @@ public class DockerNetworkService {
     @Inject
     ContainerConfig containerConfig;
 
+    @ConfigProperty(name = "orch.execution-backend", defaultValue = "docker")
+    String executionBackend;
+
     void onStartup(@Observes StartupEvent event) {
+        if (!"docker".equals(executionBackend)) {
+            // No Docker daemon on other backends; Kubernetes runs use NetworkPolicies, not Docker networks
+            Log.infof("Skipping orphaned Docker network cleanup (orch.execution-backend=%s)", executionBackend);
+            return;
+        }
         if (!containerConfig.network().cleanupOrphans()) {
             Log.info("Orphaned dedicated network cleanup is disabled");
             return;

@@ -1,8 +1,9 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.container;
 
 import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogDTO;
+import bio.cosy.featurecloud.orchestration.execution.AppInstance;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
 import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.model.Container;
 import io.quarkus.security.Authenticated;
 import io.smallrye.mutiny.Multi;
 import jakarta.ws.rs.*;
@@ -23,17 +24,21 @@ import java.util.List;
 @Tag(name = "Container", description = "Service for managing simple container")
 public interface ContainerService {
 
+    // list()/get()/startContainer()/listFeatureCloud() return the
+    // backend-neutral AppInstance/AppRun instead of docker-java's types, so
+    // the Kubernetes backend can answer too. They serialize in Docker's wire
+    // shape (DockerWireContractTest), so clients get the same JSON.
     @GET
     @Path("running")
     @Operation(summary = "List all running containers")
     @APIResponse(responseCode = "200", description = "List of running containers")
-    List<Container> list();
+    List<AppInstance> list();
 
     @GET
     @Path("running/{id}")
     @Operation(summary = "get specific running container")
     @APIResponse(responseCode = "200", description = "Container")
-    Container get(@PathParam("id") String id);
+    AppInstance get(@PathParam("id") String id);
 
     @GET
     @Path("running/{id}/logs/stream")
@@ -72,7 +77,7 @@ public interface ContainerService {
     @POST
     @Operation(summary = "Start a new container")
     @APIResponse(responseCode = "200", description = "Container")
-    CreateContainerResponse startContainer(StartAppDTO createDTO,
+    AppRun startContainer(StartAppDTO createDTO,
                                            @QueryParam("changeUrl") boolean changeUrl,
                                            @QueryParam("sendConsoleLog") @DefaultValue("false") boolean sendConsoleLog,
                                            @QueryParam("path") String path,
@@ -96,7 +101,7 @@ public interface ContainerService {
     @Path("fc")
     @Operation(summary = "List all FeatureCloud containers")
     @APIResponse(responseCode = "200", description = "List of FeatureCloud containers")
-    List<Container> listFeatureCloud();
+    List<AppInstance> listFeatureCloud();
 
     @DELETE
     @Path("fc")

@@ -3,10 +3,11 @@ package bio.cosy.featurecloud.orchestration.api.orchestration.container;
 import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogAO;
 import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogDTO;
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
+import bio.cosy.featurecloud.orchestration.execution.AppExecutionService;
+import bio.cosy.featurecloud.orchestration.execution.AppInstance;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
 import bio.cosy.featurecloud.orchestration.helper.ContainerNetworkEnv;
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
 import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.model.Container;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
@@ -27,11 +28,13 @@ public class ContainerServiceImpl implements ContainerService {
 
 
     @Inject
-    DockerAppService dockerAppService;
+    AppExecutionService appExecutionService;
 
     @Inject
     ContainerAppBO appBO;
 
+    // Pipelines (Docker-in-Docker) are still Docker-only — see
+    // docs/kubernetes-execution-backend.md.
     @Inject
     ContainerPipelineBO pipelineBO;
 
@@ -55,13 +58,13 @@ public class ContainerServiceImpl implements ContainerService {
     ContainerNetworkEnv containerNetworkEnv;
 
     @Override
-    public List<Container> list() {
-        return dockerAppService.showRunning();
+    public List<AppInstance> list() {
+        return appExecutionService.showRunning();
     }
 
     @Override
-    public Container get(String id) {
-        return dockerAppService.getById(id);
+    public AppInstance get(String id) {
+        return appExecutionService.getById(id);
     }
 
     @Override
@@ -119,7 +122,7 @@ public class ContainerServiceImpl implements ContainerService {
 
 
     @Override
-    public CreateContainerResponse startContainer(StartAppDTO createDTO, boolean changeUrl, boolean sendConsoleLog, String path, Integer port) {
+    public AppRun startContainer(StartAppDTO createDTO, boolean changeUrl, boolean sendConsoleLog, String path, Integer port) {
         String host = containerConfig.host().override().orElse(request.remoteAddress().host());
         if (changeUrl) {
             containerNetworkEnv.getNetworkEnvVariables(port, path, host,
@@ -153,8 +156,8 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
-    public List<Container> listFeatureCloud() {
-        return dockerAppService.showFeatureCloudContainers();
+    public List<AppInstance> listFeatureCloud() {
+        return appExecutionService.showFeatureCloudContainers();
     }
 
     @Override

@@ -1,6 +1,5 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.volume;
 
-import com.github.dockerjava.api.command.InspectVolumeResponse;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -22,12 +21,12 @@ public interface VolumeService {
 
     @GET
     @Operation(summary = "List all volumes")
-    List<InspectVolumeResponse> listVolumes();
+    List<VolumeInfoDTO> listVolumes();
 
     @GET
     @Path("{name}")
     @Operation(summary = "Get a specific volume by name")
-    InspectVolumeResponse getVolume(@PathParam("name") String name);
+    VolumeInfoDTO getVolume(@PathParam("name") String name);
 
     @POST
     @Path("{name}")

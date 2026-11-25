@@ -4,6 +4,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Info;
 import com.github.dockerjava.api.model.Version;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
@@ -16,8 +17,21 @@ public class DockerHealthCheck implements HealthCheck {
     @Inject
     DockerClient docker;
 
+    // Despite application.properties setting orch.docker.health-check=true,
+    // that value was never actually read anywhere — DockerRuntimeConfig's
+    // @ConfigMapping uses prefix "quarkus.docker", not "orch.docker", so the
+    // property name here was orphaned. Wiring it directly to this check
+    // is what makes "disabled" actually work
+    // for the Kubernetes execution backend, where there's no Docker daemon
+    // to ping at all.
+    @ConfigProperty(name = "orch.docker.health-check", defaultValue = "true")
+    boolean healthCheckEnabled;
+
     @Override
     public HealthCheckResponse call() {
+        if (!healthCheckEnabled) {
+            return HealthCheckResponse.named("docker-host-readiness").up().build();
+        }
         long start = System.nanoTime();
         try {
             docker.pingCmd().exec(); // erreichbar?

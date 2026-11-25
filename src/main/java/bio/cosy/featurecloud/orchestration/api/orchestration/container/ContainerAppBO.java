@@ -4,13 +4,9 @@ import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogAO;
 import bio.cosy.featurecloud.orchestration.api.logging.ContainerLogDTO;
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
-import bio.cosy.featurecloud.orchestration.service.DockerPullService;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
-import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.model.Container;
+import bio.cosy.featurecloud.orchestration.execution.AppExecutionService;
+import bio.cosy.featurecloud.orchestration.execution.AppInstance;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
 import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownEvent;
 import io.smallrye.mutiny.Multi;
@@ -35,16 +31,7 @@ import static bio.cosy.featurecloud.orchestration.api.orchestration.container.Co
 public class ContainerAppBO {
 
     @Inject
-    DockerVolumeService dockerVolumeService;
-
-    @Inject
-    DockerAppService dockerAppService;
-
-    @Inject
-    DockerPullService dockerPullService;
-
-    @Inject
-    DockerCleanupService dockerCleanupService;
+    AppExecutionService appExecutionService;
 
     @Inject
     ContainerRunAO containerRunAO;
@@ -54,9 +41,6 @@ public class ContainerAppBO {
 
     @Inject
     ManagedExecutor executor;
-
-    @Inject
-    DockerNetworkService dockerNetworkService;
 
     @Inject
     ContainerConfig containerConfig;
@@ -85,59 +69,58 @@ public class ContainerAppBO {
         }
     }
 
-    public CreateContainerResponse startContainer(StartAppDTO createDTO) {
+    public AppRun startContainer(StartAppDTO createDTO) {
         Log.infof("Starting container process for application ID: %d in group",
                 createDTO.getIdentifier(), createDTO.getGroupId());
 
         ContainerNetworkAccess access = ContainerNetworkAccess.of(
                 createDTO.getNeedsInternetAccess(), createDTO.getNeedsHostAccess(), false);
-        dockerNetworkService.ensureAccessIsConfigured(access);
+        appExecutionService.ensureNetworkAccessConfigured(access);
         ensureNotRunningAlready(createDTO);
         try {
             Log.infof("Loading application image: %s", createDTO.getAppImage());
-            dockerPullService.loadApplicationImage(createDTO.getAppImage());
+            appExecutionService.ensureImageAvailable(createDTO.getAppImage());
         } catch (jakarta.ws.rs.NotFoundException e) {
-            Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
+            Log.errorf("Failed to load image %s: %s", createDTO.getAppImage(), e.getMessage());
             throw new NotFoundException(e.getMessage());
         } catch (Exception e) {
-            Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
-            throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
+            Log.errorf("Failed to load image %s: %s", createDTO.getAppImage(), e.getMessage());
+            throw new IllegalStateException("Failed to pull image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
-        CreateContainerResponse response;
         ContainerRunEntity run = containerRunAO.create(createDTO);
         Log.info("No volumes required for this container");
-        response = dockerAppService.startApplication(createDTO);
+        AppRun response = appExecutionService.startApplication(createDTO);
 
-        dockerNetworkService.connectContainerToNetworks(response.getId(), access);
+        appExecutionService.connectNetworks(response.id(), access);
 
-        Log.infof("Container started successfully with ID: %s", response.getId());
-        startedContainers.add(response.getId());
+        Log.infof("Container started successfully with ID: %s", response.id());
+        startedContainers.add(response.id());
 
-        containerRunAO.updateStatus(run.getId(), response.getId(), ContainerRunStatus.STARTED);
+        containerRunAO.updateStatus(run.getId(), response.id(), ContainerRunStatus.STARTED);
         ensureLogStream(response, run.getId());
 
         return response;
     }
 
 
-    public void ensureLogStream(CreateContainerResponse created, Long logId) {
-        Log.infof("Starting log database stream for container %s", created.getId());
+    public void ensureLogStream(AppRun created, Long logId) {
+        Log.infof("Starting log database stream for container %s", created.id());
 
         executor.execute(() ->
-                dockerAppService.getLogById(created.getId())
+                appExecutionService.getLogById(created.id())
                         .emitOn(Infrastructure.getDefaultExecutor())
                         .subscribe()
                         .with(log -> {
                             if (containerConfig.logContainerLogs()) {
-                                Log.infof("Database stream - container %s log: %s", created.getId(), log);
+                                Log.infof("Database stream - container %s log: %s", created.id(), log);
                             }
                             ContainerLogDTO logDTO = containerLogAO.createLogTransactional(logId, log);
                             sendMessage(logDTO);
                         }, failure -> {
-                            Log.errorf("Failed to database stream logs for container %s: %s", created.getId(), failure.getMessage());
+                            Log.errorf("Failed to database stream logs for container %s: %s", created.id(), failure.getMessage());
                         }, () -> {
-                            Log.infof("Log database stream for container %s has ended", created.getId());
+                            Log.infof("Log database stream for container %s has ended", created.id());
                         })
         );
     }
@@ -146,27 +129,27 @@ public class ContainerAppBO {
         Log.debugf("Checking if container %d group %d already exists",
                 createDTO.getIdentifier(), createDTO.getGroupId());
 
-        Optional<Container> currentContainer = dockerAppService.getCurrentContainer(createDTO.getIdentifier(), createDTO.getGroupId());
-        Optional<Container> nameContainer = dockerAppService.getByName(createDTO.getContainerName());
+        Optional<AppInstance> currentContainer = appExecutionService.getCurrentContainer(createDTO.getIdentifier(), createDTO.getGroupId());
+        Optional<AppInstance> nameContainer = appExecutionService.getByName(createDTO.getContainerName());
 
         if (currentContainer.isEmpty() && nameContainer.isEmpty()) {
             Log.debug("No existing container found, proceeding with creation");
             return;
         }
         if (currentContainer.isPresent()) {
-            dockerCleanupService.cleanupContainer(currentContainer.get().getId(), true, true, true);
+            appExecutionService.cleanupContainer(currentContainer.get().id(), true, true, true);
         }
         nameContainer.filter(container -> currentContainer.stream()
-                        .noneMatch(current -> current.getId().equals(container.getId())))
+                        .noneMatch(current -> current.id().equals(container.id())))
                 .ifPresent(container ->
-                        dockerCleanupService.cleanupContainer(container.getId(), true, true, true));
+                        appExecutionService.cleanupContainer(container.id(), true, true, true));
     }
 
     public void stopContainer(String containerId, boolean hardCleanup) {
         Log.debugf("Checking if container %s already run and if stop",
                 containerId);
         // Always remove the stopped app; outputs may still be needed by a later workflow step.
-        dockerCleanupService.cleanupContainer(containerId, true, hardCleanup, true);
+        appExecutionService.cleanupContainer(containerId, true, hardCleanup, true);
     }
 
 

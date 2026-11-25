@@ -1,9 +1,7 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration.volume;
 
 import bio.cosy.featurecloud.orchestration.api.orchestration.workflow.StartWorkflowNodeDTO;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import com.github.dockerjava.api.command.CreateVolumeResponse;
-import com.github.dockerjava.api.command.InspectVolumeResponse;
+import bio.cosy.featurecloud.orchestration.execution.VolumeAdminService;
 import com.github.dockerjava.api.exception.NotFoundException;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,21 +22,21 @@ import java.util.zip.ZipOutputStream;
 public class VolumeServiceImpl implements VolumeService {
 
     @Inject
-    DockerVolumeService dockerVolumeService;
+    VolumeAdminService volumeAdminService;
 
     @Override
-    public List<InspectVolumeResponse> listVolumes() {
-        return dockerVolumeService.listVolumes();
+    public List<VolumeInfoDTO> listVolumes() {
+        return volumeAdminService.listVolumes();
     }
 
     @Override
-    public InspectVolumeResponse getVolume(String name) {
-        return dockerVolumeService.getVolume(name);
+    public VolumeInfoDTO getVolume(String name) {
+        return volumeAdminService.getVolume(name);
     }
 
     @Override
     public Response createVolume(String name) {
-        CreateVolumeResponse created = dockerVolumeService.createVolume(name);
+        VolumeInfoDTO created = volumeAdminService.createVolume(name);
         return Response.status(Response.Status.CREATED).entity(created).build();
     }
 
@@ -66,7 +64,7 @@ public class VolumeServiceImpl implements VolumeService {
         Log.infof("Uploading file %s to volume %s", fileName, name);
         try {
             Path tempFile = file.uploadedFile();
-            dockerVolumeService.moveDataToWorkspace(
+            volumeAdminService.uploadFile(
                     name,
                     tempFile,
                     Optional.ofNullable(fileName).orElse(file.fileName())
@@ -91,7 +89,7 @@ public class VolumeServiceImpl implements VolumeService {
             String fileType = Optional.ofNullable(config.fileType).orElse(".yml");
             Path tempFile = Files.createTempFile(fileName, fileType);
             Files.writeString(tempFile, config.content);
-            dockerVolumeService.moveDataToWorkspace(
+            volumeAdminService.uploadFile(
                     name,
                     tempFile,
                     fileName + fileType
@@ -112,11 +110,7 @@ public class VolumeServiceImpl implements VolumeService {
     @Override
     public Response downloadFiles(String name) {
         try {
-            Path tmpDir = Files.createTempDirectory("vol-download-" + name + "-");
-            dockerVolumeService.moveDataToHost(
-                    name,
-                    tmpDir.toAbsolutePath().toString()
-            );
+            Path tmpDir = volumeAdminService.downloadToLocalDir(name);
             List<Path> outputFiles;
             try (var paths = Files.walk(tmpDir)) {
                 outputFiles = paths.filter(Files::isRegularFile).toList();
@@ -144,7 +138,7 @@ public class VolumeServiceImpl implements VolumeService {
                     .header("Content-Disposition", "attachment; filename=\"" + name + ".zip\"")
                     .build();
 
-        } catch (NotFoundException e) {
+        } catch (NotFoundException | jakarta.ws.rs.NotFoundException e) {
             Log.warnf("Volume download refused: volume=%s does not exist", name);
             return Response.status(Response.Status.NOT_FOUND)
                     .entity("Output volume does not exist: " + name).build();
@@ -176,7 +170,7 @@ public class VolumeServiceImpl implements VolumeService {
         String inputVolume = createDTO.getInputVolumeName();
 
         try {
-            dockerVolumeService.moveDataFromInputToOutput(inputVolume, outputVolume);
+            volumeAdminService.moveDataFromInputToOutput(inputVolume, outputVolume);
         } catch (Exception e) {
             Log.errorf("Error moving files from input to output volume: %s", e.getMessage());
             throw new RuntimeException("Error moving files from input to output volume", e);
@@ -188,18 +182,19 @@ public class VolumeServiceImpl implements VolumeService {
 
     @Override
     public Response volumeSize(String name) {
-        return null;
+        Long size = volumeAdminService.volumeSize(name);
+        return size != null ? Response.ok(size).build() : Response.noContent().build();
     }
 
     @Override
     public Response removeVolume(String name) {
-        dockerVolumeService.removeVolume(name);
+        volumeAdminService.removeVolume(name);
         return Response.ok().build();
     }
 
     @Override
     public Response removeAllVolumes() {
-        dockerVolumeService.removeAllVolumes();
+        volumeAdminService.removeAllVolumes();
         return Response.ok().build();
     }
 }

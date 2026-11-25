@@ -2,8 +2,8 @@ package bio.cosy.featurecloud.orchestration.api.orchestration.workflow;
 
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.docker.DockerVolumeType;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
 import bio.cosy.featurecloud.orchestration.helper.ContainerNetworkEnv;
-import com.github.dockerjava.api.command.CreateContainerResponse;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
@@ -31,7 +31,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     ContainerNetworkEnv containerNetworkEnv;
 
     @Override
-    public CreateContainerResponse startWorkflow(StartWorkflowNodeDTO createDTO, boolean changeUrl, String path, Integer port) {
+    public AppRun startWorkflow(StartWorkflowNodeDTO createDTO, boolean changeUrl, String path, Integer port) {
         String host = containerConfig.host().override().orElse(request.remoteAddress().host());
         if (changeUrl) {
 

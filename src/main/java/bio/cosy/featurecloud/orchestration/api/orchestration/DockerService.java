@@ -1,6 +1,5 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration;
 
-import com.github.dockerjava.api.model.Info;
 import io.quarkus.security.Authenticated;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
@@ -20,7 +19,7 @@ public interface DockerService {
     @Path("info")
     @Operation(summary = "get info")
     @APIResponse(responseCode = "200", description = "info")
-    Info getInfo();
+    OrchestrationInfoDTO getInfo();
 
     @GET
     @Path("registry/images")

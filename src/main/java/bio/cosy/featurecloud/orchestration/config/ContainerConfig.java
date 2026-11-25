@@ -63,11 +63,20 @@ public interface ContainerConfig {
 
         @WithName("swap")
         Optional<Long> swap();
+
+        // Kubernetes backend only: the Pod's memory request. Without one,
+        // Kubernetes requests the whole limit.
+        @WithName("request")
+        Optional<Long> request();
     }
 
     interface Cpu {
         @WithName("shares")
         Optional<Integer> shares();
+
+        // Kubernetes backend only: the Pod's CPU request (e.g. 250m), no limit.
+        @WithName("request")
+        Optional<String> request();
     }
 
     interface Enable {

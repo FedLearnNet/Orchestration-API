@@ -8,14 +8,10 @@ import bio.cosy.featurecloud.orchestration.api.orchestration.workflow.actions.Wo
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.docker.DockerVolumeType;
-import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
-import bio.cosy.featurecloud.orchestration.service.DockerPullService;
-import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
-import com.github.dockerjava.api.command.CreateContainerResponse;
-import com.github.dockerjava.api.command.InspectVolumeResponse;
-import com.github.dockerjava.api.model.Container;
+import bio.cosy.featurecloud.orchestration.execution.AppExecutionService;
+import bio.cosy.featurecloud.orchestration.execution.AppInstance;
+import bio.cosy.featurecloud.orchestration.execution.AppRun;
+import bio.cosy.featurecloud.orchestration.execution.VolumeExecutionService;
 import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownEvent;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
@@ -35,16 +31,10 @@ import java.util.Set;
 public class WorkflowNodeBO {
 
     @Inject
-    DockerVolumeService dockerVolumeService;
+    AppExecutionService appExecutionService;
 
     @Inject
-    DockerAppService dockerAppService;
-
-    @Inject
-    DockerPullService dockerPullService;
-
-    @Inject
-    DockerCleanupService dockerCleanupService;
+    VolumeExecutionService volumeExecutionService;
 
     @Inject
     ContainerRunAO containerRunAO;
@@ -54,9 +44,6 @@ public class WorkflowNodeBO {
 
     @Inject
     ManagedExecutor executor;
-
-    @Inject
-    DockerNetworkService dockerNetworkService;
 
     @Inject
     ContainerConfig containerConfig;
@@ -80,7 +67,7 @@ public class WorkflowNodeBO {
         }
     }
 
-    public CreateContainerResponse startContainer(StartWorkflowNodeDTO createDTO) {
+    public AppRun startContainer(StartWorkflowNodeDTO createDTO) {
         Log.infof("Starting workflow node: %d in workflow: %d",
                 createDTO.getWorkflowNodeId(), createDTO.getWorkflowId());
 
@@ -90,32 +77,32 @@ public class WorkflowNodeBO {
                 createDTO.getNeedsFederatedLearningAccess());
         // Checked before anything is created so a misconfigured orchestrator does not leave a
         // started container behind that can never reach what it needs
-        dockerNetworkService.ensureAccessIsConfigured(access);
+        appExecutionService.ensureNetworkAccessConfigured(access);
 
         ensureNotRunningAlready(createDTO);
         try {
             Log.infof("Loading application image: %s", createDTO.getAppImage());
-            dockerPullService.loadApplicationImage(createDTO.getAppImage());
+            appExecutionService.ensureImageAvailable(createDTO.getAppImage());
         } catch (NotFoundException e) {
-            Log.errorf("Failed to load Docker image %s: %s", createDTO.getAppImage(), e.getMessage());
+            Log.errorf("Failed to load image %s: %s", createDTO.getAppImage(), e.getMessage());
             throw new NotFoundException(e.getMessage());
         } catch (Exception e) {
-            Log.errorf(e, "Failed to load Docker image %s for workflow %d node %d: %s",
+            Log.errorf(e, "Failed to load image %s for workflow %d node %d: %s",
                     createDTO.getAppImage(), createDTO.getWorkflowId(), createDTO.getWorkflowNodeId(), e.getMessage());
-            throw new IllegalStateException("Failed to pull Docker image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to pull image " + createDTO.getAppImage() + ": " + e.getMessage(), e);
         }
 
-        CreateContainerResponse response;
         ContainerRunEntity run = containerRunAO.create(createDTO);
 
+        AppRun response;
         try {
             Log.info("Volumes required for this container - preparing input and output volumes");
             String outputVolumeName = ensureOutputVolume(createDTO);
             //First output, then input to ensure data consistency
             String inputVolumeName = ensureInputVolume(createDTO);
-            response = dockerAppService.startApplication(createDTO, inputVolumeName, outputVolumeName, false);
+            response = appExecutionService.startApplication(createDTO, inputVolumeName, outputVolumeName, false);
 
-            dockerNetworkService.connectContainerToNetworks(response.getId(), access);
+            appExecutionService.connectNetworks(response.id(), access);
         } catch (Exception e) {
             Log.errorf(e, "Failed to start container for workflow %d node %d (image %s, name %s): %s",
                     createDTO.getWorkflowId(), createDTO.getWorkflowNodeId(),
@@ -123,32 +110,32 @@ public class WorkflowNodeBO {
             throw e;
         }
 
-        Log.infof("Container started successfully with ID: %s", response.getId());
-        startedContainers.add(response.getId());
+        Log.infof("Container started successfully with ID: %s", response.id());
+        startedContainers.add(response.id());
 
-        containerRunAO.updateStatus(run.getId(), response.getId(), ContainerRunStatus.STARTED);
+        containerRunAO.updateStatus(run.getId(), response.id(), ContainerRunStatus.STARTED);
         ensureLogStream(response, run.getId());
 
         return response;
     }
 
 
-    public void ensureLogStream(CreateContainerResponse created, Long logId) {
-        Log.infof("Starting log database stream for container %s", created.getId());
+    public void ensureLogStream(AppRun created, Long logId) {
+        Log.infof("Starting log database stream for container %s", created.id());
 
         executor.execute(() ->
-                dockerAppService.getLogById(created.getId())
+                appExecutionService.getLogById(created.id())
                         .emitOn(Infrastructure.getDefaultExecutor())
                         .subscribe()
                         .with(log -> {
                             if(containerConfig.logContainerLogs()) {
-                                Log.infof("Database stream - container %s log: %s", created.getId(), log);
+                                Log.infof("Database stream - container %s log: %s", created.id(), log);
                             }
                             containerLogAO.createLogTransactional(logId, log);
                         }, failure -> {
-                            Log.errorf("Failed to database stream logs for container %s: %s", created.getId(), failure.getMessage());
+                            Log.errorf("Failed to database stream logs for container %s: %s", created.id(), failure.getMessage());
                         }, () -> {
-                            Log.infof("Log database stream for container %s has ended", created.getId());
+                            Log.infof("Log database stream for container %s has ended", created.id());
                         })
         );
     }
@@ -157,8 +144,8 @@ public class WorkflowNodeBO {
         Log.debugf("Checking if container for workflow %d node %d already exists",
                 createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
 
-        Optional<Container> currentContainer = dockerAppService.getCurrentWorkflowNode(createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
-        Optional<Container> nameContainer = dockerAppService.getByName(createDTO.getContainerName());
+        Optional<AppInstance> currentContainer = appExecutionService.getCurrentWorkflowNode(createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
+        Optional<AppInstance> nameContainer = appExecutionService.getByName(createDTO.getContainerName());
 
         if (currentContainer.isEmpty() && nameContainer.isEmpty()) {
             Log.debug("No existing container found, proceeding with creation");
@@ -169,22 +156,22 @@ public class WorkflowNodeBO {
         // name, or by both, so each hit is cleaned up independently.
         currentContainer.ifPresent(container -> {
             Log.infof("Hard cleanup of container %s for workflow %d node %d",
-                    container.getId(), createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
-            dockerCleanupService.cleanupContainer(container.getId(), true, true, true);
+                    container.id(), createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
+            appExecutionService.cleanupContainer(container.id(), true, true, true);
         });
         nameContainer.filter(container -> currentContainer.stream()
-                        .noneMatch(current -> current.getId().equals(container.getId())))
+                        .noneMatch(current -> current.id().equals(container.id())))
                 .ifPresent(container -> {
                     Log.infof("Hard cleanup of container %s found by name %s",
-                            container.getId(), createDTO.getContainerName());
-                    dockerCleanupService.cleanupContainer(container.getId(), true, true, true);
+                            container.id(), createDTO.getContainerName());
+                    appExecutionService.cleanupContainer(container.id(), true, true, true);
                 });
     }
 
     //All previous containers must be runned to ensure data consistency,
     private String ensureInputVolume(StartWorkflowNodeDTO createDTO) {
         Log.infof("Setting up input volume for workflow %d node %d", createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
-        String newVolumeName = dockerVolumeService.createVolume(createDTO.getWorkflowId(), DockerVolumeType.INPUT, createDTO.getInputVolumeName()).getName();
+        String newVolumeName = volumeExecutionService.ensureVolume(createDTO.getWorkflowId(), DockerVolumeType.INPUT, createDTO.getInputVolumeName());
         Log.infof("Created input volume: %s", newVolumeName);
 
         if (createDTO.getIsFistNode()) {
@@ -207,15 +194,14 @@ public class WorkflowNodeBO {
         Log.infof("Checking previous output volume %s for data migration to new input volume %s",
                 prevInput.getOutputVolumeName(workflowId), newVolumeName);
         String prevVolumeName = prevInput.getOutputVolumeName(workflowId);
-        InspectVolumeResponse volume = dockerVolumeService.getVolume(prevVolumeName);
-        if (volume == null) {
+        if (!volumeExecutionService.volumeExists(prevVolumeName)) {
             Log.warnf("Previous output volume %s not found for data migration", prevVolumeName);
             throw new NotFoundException("Previous output volume not found: " + prevVolumeName);
         }
 
         try {
             Log.infof("Moving data from previous output volume %s to new input volume %s", prevVolumeName, newVolumeName);
-            dockerVolumeService.moveFileToToAnotherContainer(prevVolumeName, newVolumeName, prevInput.getOriginalFileName(), prevInput.getNewFileName());
+            volumeExecutionService.copyBetweenVolumes(prevVolumeName, prevInput.getOriginalFileName(), newVolumeName, prevInput.getNewFileName());
         } catch (Exception e) {
             Log.errorf("Failed to move data between volumes: %s", e.getMessage());
             throw new BadRequestException(e.getMessage());
@@ -228,15 +214,15 @@ public class WorkflowNodeBO {
 
     private String ensureOutputVolume(StartWorkflowNodeDTO createDTO) {
         Log.infof("Setting up output volume for workflow %d node %d", createDTO.getWorkflowId(), createDTO.getWorkflowNodeId());
-        String newVolumeName = dockerVolumeService.createVolume(createDTO.getWorkflowId(), DockerVolumeType.OUTPUT, createDTO.getOutputVolumeName()).getName();
+        String newVolumeName = volumeExecutionService.ensureVolume(createDTO.getWorkflowId(), DockerVolumeType.OUTPUT, createDTO.getOutputVolumeName());
         Log.infof("Created output volume: %s", newVolumeName);
         return newVolumeName;
     }
 
     public void stopContainerStep(String step, boolean hardCleanup) {
-        List<Container> containers = dockerAppService.getByStepLabel(step);
-        for (Container com : containers) {
-            stopContainer(com.getId(), hardCleanup);
+        List<AppInstance> containers = appExecutionService.getByStepLabel(step);
+        for (AppInstance com : containers) {
+            stopContainer(com.id(), hardCleanup);
         }
     }
 
@@ -244,12 +230,12 @@ public class WorkflowNodeBO {
         Log.debugf("Checking if container %s already run and if stop",
                 containerId);
 
-        Container container = dockerAppService.getById(containerId);
+        AppInstance container = appExecutionService.getById(containerId);
         if (container == null) {
             Log.warnf("Container with ID %s not found", containerId);
             return;
         }
         // Always remove the stopped app; outputs may still be needed by a later workflow step.
-        dockerCleanupService.cleanupContainer(containerId, true, hardCleanup, true);
+        appExecutionService.cleanupContainer(containerId, true, hardCleanup, true);
     }
 }

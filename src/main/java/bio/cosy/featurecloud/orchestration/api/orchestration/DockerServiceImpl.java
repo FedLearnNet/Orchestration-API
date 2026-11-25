@@ -1,10 +1,9 @@
 package bio.cosy.featurecloud.orchestration.api.orchestration;
 
-import bio.cosy.featurecloud.orchestration.service.DockerCleanupService;
-import bio.cosy.featurecloud.orchestration.service.DockerOrchestration;
+import bio.cosy.featurecloud.orchestration.execution.AppExecutionService;
+import bio.cosy.featurecloud.orchestration.execution.OrchestrationInfoService;
 import bio.cosy.featurecloud.orchestration.service.DockerRegistryService;
 import com.github.dockerjava.api.exception.NotModifiedException;
-import com.github.dockerjava.api.model.Info;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -16,17 +15,17 @@ import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 public class DockerServiceImpl implements DockerService {
 
     @Inject
-    DockerOrchestration dockerOrchestration;
+    OrchestrationInfoService orchestrationInfoService;
 
     @Inject
-    DockerCleanupService dockerCleanupService;
+    AppExecutionService appExecutionService;
 
     @Inject
     DockerRegistryService dockerRegistryService;
 
     @Override
-    public Info getInfo() {
-        return dockerOrchestration.getInfo();
+    public OrchestrationInfoDTO getInfo() {
+        return orchestrationInfoService.getInfo();
     }
 
     @Override
@@ -46,14 +45,14 @@ public class DockerServiceImpl implements DockerService {
 
     @Override
     public Response removeLocalImage(String name) {
-        dockerCleanupService.removeImage(name);
+        appExecutionService.removeImage(name);
         return Response.noContent().build();
     }
 
     @Override
     public Response cleanupWorkflow(Long workflowId) {
         try {
-            dockerCleanupService.cleanupWorkflow(workflowId);
+            appExecutionService.cleanupWorkflow(workflowId);
             return Response.ok().build();
         } catch (NotModifiedException e) {
             return Response.ok().build();
@@ -66,7 +65,7 @@ public class DockerServiceImpl implements DockerService {
     @Override
     public Response cleanupWorkflowNode(Long workflowNodeId) {
         try {
-            dockerCleanupService.cleanupWorkflowNode(workflowNodeId);
+            appExecutionService.cleanupWorkflowNode(workflowNodeId);
             return Response.ok().build();
         } catch (NotModifiedException e) {
             return Response.ok().build();

@@ -91,6 +91,24 @@
             <artifactId>docker-java-transport-httpclient5</artifactId>
             <version>${docker.version}</version>
         </dependency>
+
+        <!-- Kubernetes execution backend (see docs/kubernetes-execution-backend.md) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-kubernetes-client</artifactId>
+        </dependency>
+        <!-- quarkus-kubernetes-client's default Vert.x HTTP engine doesn't support
+             WebSocket-based subresources (exec/attach) — confirmed live: file(path)
+             .upload()/.copy() (which shell out to exec+tar under the hood) got a
+             "WebSocket upgrade failure: 403" even with correct RBAC, while a plain
+             HTTPS pod-create with the same client succeeded. fabric8 auto-selects
+             OkHttp over Vert.x for these calls once it's on the classpath (higher
+             SPI priority) — no other wiring needed. -->
+        <dependency>
+            <groupId>io.fabric8</groupId>
+            <artifactId>kubernetes-httpclient-okhttp</artifactId>
+        </dependency>
+
         <!-- Hibernate ORM specific dependencies -->
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -122,6 +140,12 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-test-h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- fabric8 mock API server for the Kubernetes backend's unit tests -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-kubernetes-client</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
