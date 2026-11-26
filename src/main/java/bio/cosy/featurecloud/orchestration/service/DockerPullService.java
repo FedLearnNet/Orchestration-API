@@ -2,6 +2,7 @@ package bio.cosy.featurecloud.orchestration.service;
 
 import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
+import bio.cosy.featurecloud.orchestration.config.UpdaterConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.NamedDockerClient;
 import bio.cosy.featurecloud.orchestration.docker.client.config.DockerClientRuntimeConfig;
 import bio.cosy.featurecloud.orchestration.docker.client.config.DockerRuntimeConfig;
@@ -12,6 +13,8 @@ import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.InternalServerErrorException;
+import jakarta.ws.rs.WebApplicationException;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -31,6 +34,9 @@ public class DockerPullService {
 
     @Inject
     PipelineConfig pipelineConfig;
+
+    @Inject
+    UpdaterConfig updaterConfig;
 
     @Inject
     ContainerConfig containerConfig;
@@ -53,7 +59,23 @@ public class DockerPullService {
     }
 
     public void loadPipelineImage(String imageName) throws Exception {
-        if (isPipelineImage(imageName)) {
+        loadOwnImage(imageName, pipelineConfig.imagePrefix());
+    }
+
+    // the image of flnet; a refusal or a missing image stays as it is, any other failure is a server error
+    public void loadUpdaterImage(String imageName) {
+        try {
+            loadOwnImage(imageName, updaterConfig.imagePrefix());
+        } catch (WebApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new InternalServerErrorException("Could not pull " + imageName + ": " + e.getMessage(), e);
+        }
+    }
+
+    // an image of FL-Net itself: exactly the configured prefix, with any tag or digest
+    private void loadOwnImage(String imageName, String prefix) throws Exception {
+        if (isImage(imageName, prefix)) {
             if (isRegistryOf(imageName, "ghcr")) {
                 loadApplicationImage(imageName, dockerClientGhcr, "ghcr");
                 return;
@@ -63,13 +85,8 @@ public class DockerPullService {
                 return;
             }
         }
-        Log.errorf("Pipeline image %s is not an allowed image", imageName);
-        throw new ForbiddenException("Pipeline image not allowed: " + imageName);
-    }
-
-    // the image must be exactly pipeline.image-prefix, with any tag or digest
-    private boolean isPipelineImage(String imageName) {
-        return isImage(imageName, pipelineConfig.imagePrefix());
+        Log.errorf("Image %s is not an allowed image", imageName);
+        throw new ForbiddenException("Image not allowed: " + imageName);
     }
 
     static boolean isImage(String imageName, String name) {

@@ -35,6 +35,9 @@ public class StartWorkflowNodeDTO implements BaseName {
 
     private List<String> environments = new ArrayList<>();
 
+    // container of an external database joined to the app's network
+    private String externalSource;
+
     public String getBasename() {
         return getWorkflowContainerName(workflowId, workflowNodeId);
     }

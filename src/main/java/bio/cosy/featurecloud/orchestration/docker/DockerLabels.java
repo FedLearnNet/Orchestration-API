@@ -12,7 +12,10 @@ public enum DockerLabels {
     FEATURE_CLOUD_PIPELINE("featurecloud.pipeline"),
     FEATURE_CLOUD_PIPELINE_VERSION("featurecloud.pipeline.version"),
     FEATURE_CLOUD_WORKFLOW_MAX_STEPS("featurecloud.workflow.maxsteps"),
-    FEATURE_CLOUD_VOLUME_TYPE("featurecloud.volume.type");
+    FEATURE_CLOUD_VOLUME_TYPE("featurecloud.volume.type"),
+    FL_NET_MAINTENANCE("bio.cosy.flnet.maintenance.deployment"),
+    FL_NET_MAINTENANCE_MODE("bio.cosy.flnet.maintenance.mode");
+
 
     private String name;
 

@@ -9,6 +9,7 @@ import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.docker.DockerVolumeType;
 import bio.cosy.featurecloud.orchestration.service.DockerAppService;
+import bio.cosy.featurecloud.orchestration.service.DockerNetworkExternalDBService;
 import bio.cosy.featurecloud.orchestration.service.DockerNetworkService;
 import bio.cosy.featurecloud.orchestration.service.DockerPullService;
 import bio.cosy.featurecloud.orchestration.service.DockerVolumeService;
@@ -57,6 +58,9 @@ public class WorkflowNodeBO {
 
     @Inject
     DockerNetworkService dockerNetworkService;
+
+    @Inject
+    DockerNetworkExternalDBService dockerNetworkExternalDBService;
 
     @Inject
     ContainerConfig containerConfig;
@@ -116,6 +120,7 @@ public class WorkflowNodeBO {
             response = dockerAppService.startApplication(createDTO, inputVolumeName, outputVolumeName, false);
 
             dockerNetworkService.connectContainerToNetworks(response.getId(), access);
+            dockerNetworkExternalDBService.connectExternalSource(response.getId(), createDTO.getExternalSource());
         } catch (Exception e) {
             Log.errorf(e, "Failed to start container for workflow %d node %d (image %s, name %s): %s",
                     createDTO.getWorkflowId(), createDTO.getWorkflowNodeId(),

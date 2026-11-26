@@ -31,6 +31,7 @@ import static bio.cosy.featurecloud.orchestration.service.DockerVolumeService.VO
 public class DockerAppService {
 
     private static final int REMOVAL_WAIT_SECONDS = 30;
+    private static final String DOCKER_SOCKET = "/var/run/docker.sock";
 
     @Inject
     DockerClient dockerClient;
@@ -432,6 +433,25 @@ public class DockerAppService {
             Log.errorf("Failed to create container: %s", e.getMessage());
             throw e;
         }
+    }
+
+
+    public String startFlnet(String image, String directory, Map<String, String> labels, List<String> command) {
+        HostConfig hostConfig = HostConfig.newHostConfig()
+                .withBinds(new Bind(DOCKER_SOCKET, new Volume(DOCKER_SOCKET)), new Bind(directory, new Volume(directory)))
+                .withAutoRemove(true);
+        String containerId = dockerClient.createContainerCmd(image)
+                .withLabels(labels)
+                .withCmd(command)
+                .withHostConfig(hostConfig)
+                .exec()
+                .getId();
+        startContainer(containerId);
+        return containerId;
+    }
+
+    public Optional<Container> getByLabels(Map<String, String> labels) {
+        return dockerClient.listContainersCmd().withLabelFilter(labels).withShowAll(true).exec().stream().findFirst();
     }
 
     public void startContainer(String containerId) {

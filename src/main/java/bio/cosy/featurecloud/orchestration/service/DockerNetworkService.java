@@ -179,7 +179,7 @@ public class DockerNetworkService {
         return removed;
     }
 
-    private boolean containerExists(String containerId) {
+    boolean containerExists(String containerId) {
         try {
             dockerClient.inspectContainerCmd(containerId).exec();
             return true;

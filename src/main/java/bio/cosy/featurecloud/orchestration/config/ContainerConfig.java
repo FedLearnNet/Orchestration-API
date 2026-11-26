@@ -97,6 +97,16 @@ public interface ContainerConfig {
         @WithName("relay")
         Optional<String> relay();
 
+        // external databases a TRE app may reach: a container joined to its network, e.g. neo4j, or an
+        // address outside docker, e.g. 10.0.5.12:5432, relayed by a forwarder container
+        @WithName("external-sources")
+        Optional<List<String>> externalSources();
+
+        // relays one address outside docker to the internal network of a TRE app
+        @WithName("forwarder-image")
+        @WithDefault("alpine/socat:1.8.1.1")
+        String forwarderImage();
+
         // Attach containers to the configured non-internal networks even when they were started
         //without internet access. Only meant for local/dev setups.
         @WithName("always-bridge")

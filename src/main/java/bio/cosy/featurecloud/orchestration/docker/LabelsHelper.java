@@ -64,4 +64,17 @@ public class LabelsHelper {
         maps.put(DockerLabels.FEATURE_CLOUD_WORKFLOW_ID.toString(), workflowId.toString());
         return maps;
     }
+
+    public static Map<String, String> createLabelsForMaintenance(String directory, String mode) {
+        Map<String, String> maps = createLabels();
+        maps.put(DockerLabels.FL_NET_MAINTENANCE.toString(), directory);
+        maps.put(DockerLabels.FL_NET_MAINTENANCE_MODE.toString(), mode);
+        return maps;
+    }
+
+
+    public static Map<String, String> createLabelsForMaintenanceCheck(String directory) {
+        return Map.of(DockerLabels.FL_NET_MAINTENANCE.toString(), directory);
+    }
+
 }

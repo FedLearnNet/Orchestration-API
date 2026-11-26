@@ -21,6 +21,9 @@ public class DockerCleanupService {
     DockerNetworkService dockerNetworkService;
 
     @Inject
+    DockerNetworkExternalDBService dockerNetworkExternalDBService;
+
+    @Inject
     DockerVolumeService dockerVolumeService;
 
     @Inject
@@ -76,6 +79,7 @@ public class DockerCleanupService {
 
         // 3. Remove dedicated network while the container can still be inspected
         if (removeDedicatedNetwork) {
+            dockerNetworkExternalDBService.removeForwarder(containerId);
             dockerNetworkService.removeDedicatedNetwork(containerId);
         }
 
