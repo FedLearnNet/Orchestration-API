@@ -4,8 +4,7 @@ import bio.cosy.featurecloud.orchestration.config.ContainerConfig;
 import bio.cosy.featurecloud.orchestration.config.PipelineConfig;
 import bio.cosy.featurecloud.orchestration.docker.ContainerNetworkAccess;
 import bio.cosy.featurecloud.orchestration.service.*;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.model.Container;
 import io.quarkus.logging.Log;
@@ -15,6 +14,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
+import tools.jackson.core.JacksonException;
 
 import java.util.Optional;
 import java.util.Set;
@@ -184,7 +184,7 @@ public class ContainerPipelineBO {
     private String toJsonArray(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BadRequestException("Failed to serialize pipeline configuration value", e);
         }
     }
