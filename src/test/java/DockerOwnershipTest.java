@@ -54,9 +54,9 @@ class DockerOwnershipTest {
         String volume = "orch-completion-" + UUID.randomUUID();
         String container = null;
         try {
-            docker.createVolumeCmd().withName(volume).withLabels(labels()).exec();
+            docker.createVolumeCmd().withName(volume).withLabels(appLabels()).exec();
             container = docker.createContainerCmd("busybox:1.37")
-                    .withLabels(labels()).withCmd("sleep", "300")
+                    .withLabels(appLabels()).withCmd("sleep", "300")
                     .withHostConfig(HostConfig.newHostConfig().withNetworkMode("none")
                             .withBinds(new Bind(volume, new Volume("/output"))))
                     .exec().getId();
@@ -189,6 +189,14 @@ class DockerOwnershipTest {
         labels.put(DockerLabels.FEATURE_CLOUD_GROUP_ID.toString(), Long.toString(WORKFLOW));
         labels.putAll(LabelsHelper.createLabelsForPipeline(WORKFLOW));
         labels.put(DockerLabels.FEATURE_CLOUD_WORKFLOW_STEP.toString(), STEP);
+        return labels;
+    }
+
+    // Pipeline labels would let the die-event cleanup race in and drop the retained volume
+    private Map<String, String> appLabels() {
+        Map<String, String> labels = labels();
+        labels.remove(DockerLabels.FEATURE_CLOUD_PIPELINE.toString());
+        labels.remove(DockerLabels.FEATURE_CLOUD_PIPELINE_VERSION.toString());
         return labels;
     }
 

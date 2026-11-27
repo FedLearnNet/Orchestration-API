@@ -5,7 +5,7 @@ import bio.cosy.featurecloud.orchestration.docker.DockerLabels;
 import bio.cosy.featurecloud.orchestration.docker.LabelsHelper;
 import bio.cosy.featurecloud.orchestration.helper.LogHelper;
 import bio.cosy.featurecloud.orchestration.service.DockerAppService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.model.Container;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Multi;
@@ -14,6 +14,7 @@ import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.InternalServerErrorException;
+import tools.jackson.core.JacksonException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -93,7 +94,7 @@ public class MaintenanceProgressBO {
         }
         try {
             return objectMapper.readValue(file.toFile(), UpgradeStateDTO.class);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new InternalServerErrorException("Could not read " + file + ": " + e.getMessage());
         }
     }
@@ -143,7 +144,7 @@ public class MaintenanceProgressBO {
             config.deploymentDir().ifPresent(directory -> backup.setPath(
                     Path.of(directory).resolve(BACKUPS_FOLDER).resolve(manifest.getParent().getFileName()).toString()));
             return Optional.of(backup);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             Log.warnf("Skipping %s: %s", manifest, e.getMessage());
             return Optional.empty();
         }
